@@ -1257,6 +1257,9 @@ class ResourcesTest : GradlePluginTestBase() {
                 check.logContains("Configure test resources for 'macosArm64' target")
 
                 check.taskSuccessful(":desktopTest")
+                if (currentOS == OS.MacOS) {
+                    check.taskSuccessful(":linkDebugTestIosSimulatorArm64")
+                }
             }
         }
     }
