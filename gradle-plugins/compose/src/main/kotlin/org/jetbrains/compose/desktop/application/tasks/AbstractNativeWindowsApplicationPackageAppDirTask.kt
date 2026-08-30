@@ -77,7 +77,12 @@ internal fun windowsExecutableFileName(packageName: String): String {
     }
     require(!packageName.endsWith('.')) { "Windows package name must not end with a dot: '$packageName'" }
 
-    val deviceName = packageName.substringBefore('.').uppercase(Locale.ROOT)
+    // Win32 strips trailing ASCII spaces and periods while resolving a path component. Apply the
+    // same normalization to the base name so values such as "CON .txt" cannot bypass the device
+    // name check and resolve through the Win32 device namespace instead of to a regular file.
+    val deviceName = packageName.substringBefore('.')
+        .trimEnd(' ', '.')
+        .uppercase(Locale.ROOT)
     require(deviceName !in WINDOWS_RESERVED_DEVICE_NAMES) {
         "Windows package name is a reserved device name: '$packageName'"
     }

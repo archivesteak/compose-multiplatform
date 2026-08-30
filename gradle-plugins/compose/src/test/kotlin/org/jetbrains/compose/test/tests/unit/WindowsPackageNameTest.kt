@@ -29,7 +29,9 @@ class WindowsPackageNameTest {
             "trailing.",
             "CON",
             "nul.txt",
+            "CON .txt",
             "COM1",
+            "COM1 .log",
             "LPT³.log"
         ).forEach { packageName ->
             assertFailsWith<IllegalArgumentException>(packageName) {
