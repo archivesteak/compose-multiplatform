@@ -6,6 +6,7 @@
 package org.jetbrains.compose.experimental.internal
 
 import org.gradle.api.Project
+import org.jetbrains.compose.internal.FORK_SKIKO_GROUP
 import org.jetbrains.compose.internal.utils.findLocalOrGlobalProperty
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinTarget
@@ -16,7 +17,7 @@ internal fun Project.configureExperimentalTargetsFlagsCheck(mppExt: KotlinMultip
     }
 }
 
-private const val SKIKO_ARTIFACT_PREFIX = "org.jetbrains.skiko:skiko"
+private val SKIKO_ARTIFACT_PREFIXES = listOf("org.jetbrains.skiko:skiko", "$FORK_SKIKO_GROUP:skiko")
 
 private class TargetType(
     val id: String,
@@ -27,6 +28,7 @@ private val TargetType.gradlePropertyName get() = "org.jetbrains.compose.experim
 
 private val EXPERIMENTAL_TARGETS: Set<TargetType> = setOf(
     TargetType("macos", identifiers = listOf("macosArm64")),
+    TargetType("mingw", identifiers = listOf("mingwX64")),
 )
 
 private sealed interface CheckResult {
@@ -72,8 +74,8 @@ private fun checkTarget(project: Project, target: KotlinTarget): CheckResult {
         if (configuration.isCanBeResolved && configuration.name in targetConfigurationNames) {
             val resolvedConfiguration = configuration.resolvedConfiguration
             if (!resolvedConfiguration.hasError()) {
-                val containsSkikoArtifact = resolvedConfiguration.resolvedArtifacts.any {
-                    it.id.displayName.contains(SKIKO_ARTIFACT_PREFIX)
+                val containsSkikoArtifact = resolvedConfiguration.resolvedArtifacts.any { artifact ->
+                    SKIKO_ARTIFACT_PREFIXES.any { artifact.id.displayName.contains(it) }
                 }
                 if (containsSkikoArtifact) {
                     val targetIsDisabled = project.findLocalOrGlobalProperty(targetType.gradlePropertyName).map { it != "true" }

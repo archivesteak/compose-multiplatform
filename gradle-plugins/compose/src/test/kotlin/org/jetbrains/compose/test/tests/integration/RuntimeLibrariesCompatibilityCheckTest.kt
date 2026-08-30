@@ -33,10 +33,10 @@ class RuntimeLibrariesCompatibilityCheckTest : GradlePluginTestBase() {
 
         file("build.gradle.kts").modify {
             it.replace(
-                "api(\"org.jetbrains.compose.ui:ui:${defaultTestEnvironment.composeVersion}\")",
+                "api(\"io.github.archivesteak.compose.ui:ui:${defaultTestEnvironment.composeVersion}\")",
                 "api(\"org.jetbrains.compose.ui:ui:1.9.3\")"
             ).replace(
-                "api(\"org.jetbrains.compose.foundation:foundation:${defaultTestEnvironment.composeVersion}\")",
+                "api(\"io.github.archivesteak.compose.foundation:foundation:${defaultTestEnvironment.composeVersion}\")",
                 "api(\"org.jetbrains.compose.foundation:foundation:1.9.3\")"
             )
         }
@@ -71,8 +71,8 @@ class RuntimeLibrariesCompatibilityCheckTest : GradlePluginTestBase() {
         // In case of dependency to old compose:ui without skiko explicitly, no warning should be emitted.
         file("build.gradle.kts").modify {
             it.replace(
-                "api(\"org.jetbrains.compose.foundation:foundation:${defaultTestEnvironment.composeVersion}\")",
-                "api(\"org.jetbrains.compose.foundation:foundation:${defaultTestEnvironment.composeVersion}\")\n" +
+                "api(\"io.github.archivesteak.compose.foundation:foundation:${defaultTestEnvironment.composeVersion}\")",
+                "api(\"io.github.archivesteak.compose.foundation:foundation:${defaultTestEnvironment.composeVersion}\")\n" +
                         "            implementation(\"$OLD_COMPOSE_DEPENDENCY\")",
             )
         }

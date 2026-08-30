@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     kotlin("multiplatform")
     id("com.android.library")
-    id("org.jetbrains.compose")
+    id("io.github.archivesteak.compose")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 

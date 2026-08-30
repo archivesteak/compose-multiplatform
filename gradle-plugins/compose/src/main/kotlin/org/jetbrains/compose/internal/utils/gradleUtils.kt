@@ -8,6 +8,7 @@ package org.jetbrains.compose.internal.utils
 import org.gradle.api.DomainObjectCollection
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
+import org.jetbrains.compose.internal.FORK_COMPOSE_ROOT_GROUP
 import org.gradle.api.logging.Logger
 import org.jetbrains.compose.ComposeBuildConfig
 import java.util.*
@@ -41,13 +42,13 @@ fun Project.getLocalProperty(key: String): String? {
 
 internal fun Project.detachedComposeGradleDependency(
     artifactId: String,
-    groupId: String = "org.jetbrains.compose",
+    groupId: String = FORK_COMPOSE_ROOT_GROUP,
 ): Configuration =
     detachedDependency(groupId = groupId, artifactId = artifactId, version = ComposeBuildConfig.composeGradlePluginVersion)
 
 internal fun Project.detachedComposeDependency(
     artifactId: String,
-    groupId: String = "org.jetbrains.compose",
+    groupId: String = FORK_COMPOSE_ROOT_GROUP,
 ): Configuration =
     detachedDependency(groupId = groupId, artifactId = artifactId, version = ComposeBuildConfig.composeVersion)
 

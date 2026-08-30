@@ -23,24 +23,24 @@ abstract class NativeApplication @Inject constructor(
     internal val _targets = arrayListOf<KotlinNativeTarget>()
     fun targets(vararg targets: KotlinTarget) {
         val nonNativeTargets = arrayListOf<KotlinTarget>()
-        val nonMacOSTargets = arrayListOf<KotlinNativeTarget>()
+        val nonDesktopTargets = arrayListOf<KotlinNativeTarget>()
         for (target in targets) {
             if (target is KotlinNativeTarget) {
-                if (target.konanTarget.family == Family.OSX) {
+                if (target.konanTarget.family == Family.OSX || target.konanTarget.family == Family.MINGW) {
                     _targets.add(target)
                 } else {
-                    nonMacOSTargets.add(target)
+                    nonDesktopTargets.add(target)
                 }
             } else {
                 nonNativeTargets.add(target)
             }
         }
 
-        check(nonNativeTargets.isEmpty() && nonMacOSTargets.isEmpty()) {
+        check(nonNativeTargets.isEmpty() && nonDesktopTargets.isEmpty()) {
             buildString {
-                appendLine("compose.nativeApplication.targets supports only Kotlin/Native macOS targets for now:")
+                appendLine("compose.desktop.nativeApplication.targets supports Kotlin/Native macOS and mingwX64 targets:")
                 nonNativeTargets.forEach { appendLine("* '${it.name}' is not a native target;") }
-                nonMacOSTargets.forEach { appendLine("* '${it.name}' is not a macOS target;") }
+                nonDesktopTargets.forEach { appendLine("* '${it.name}' is not a supported desktop target;") }
             }
 
         }

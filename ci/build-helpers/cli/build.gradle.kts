@@ -44,17 +44,6 @@ val fixModulesBeforePublishing by tasks.registering(FixModulesBeforePublishingTa
     outputRepoDir.set(preparedArtifactsRoot)
 }
 
-val reuploadArtifactsToMavenCentral by tasks.registering(UploadToSonatypeTask::class) {
-    dependsOn(fixModulesBeforePublishing)
-
-    modulesToUpload.set(project.provider { readComposeModules(modulesFile, preparedArtifactsRoot) })
-
-    user.set(mavenCentral.user)
-    password.set(mavenCentral.password)
-    deployName.set(mavenCentral.deployName)
-    publishAfterUploading.set(mavenCentral.publishAfterUploading)
-}
-
 fun readComposeModules(
     modulesFile: Provider<out FileSystemLocation>,
     repoRoot: Provider<out FileSystemLocation>

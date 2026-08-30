@@ -57,23 +57,6 @@ fun PublishingExtension.configurePublishing(project: Project) {
             name = "BuildRepo"
             url = uri("${rootProject.buildDir}/repo")
         }
-        maven {
-            name = "ComposeInternalRepo"
-            url = uri(
-                System.getenv("COMPOSE_INTERNAL_REPO_URL")
-                    ?: "https://packages.jetbrains.team/maven/p/cmp/dev"
-            )
-            credentials {
-                username =
-                    System.getenv("COMPOSE_INTERNAL_REPO_USERNAME")
-                        ?: System.getenv("COMPOSE_REPO_USERNAME")
-                                ?: ""
-                password =
-                    System.getenv("COMPOSE_INTERNAL_REPO_KEY")
-                        ?: System.getenv("COMPOSE_REPO_KEY")
-                                ?: ""
-            }
-        }
     }
     publications {
         create<MavenPublication>("main") {

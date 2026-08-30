@@ -34,13 +34,6 @@ tasks.register("generateListOfPackagesToDelete") {
     }
 }
 
-tasks.register("deletePackages") {
-    dependsOn(checkJavaVersion)
-    doLast {
-        Space().deletePackages(packagesToDeleteFile)
-    }
-}
-
 fun getLocalProperties() =
     Properties().apply {
         val file = project.file("local.properties")
@@ -176,41 +169,6 @@ fun Space.preparePackagesToDelete(packagesFile: File) {
 
     logger.quiet("List of packages to delete is written to:\n    $packagesFile")
     logger.quiet("Uncomment packages you want to delete and rerun the task!")
-}
-
-fun Space.deletePackages(packagesFile: File) {
-    if (!packagesFile.exists()) {
-        error("A list of packages to delete does not exist, run 'generateListOfPackagesToDelete' first")
-    }
-    val packagesToDelete = ArrayList<PackageInfo>()
-    packagesFile.forEachLine { line ->
-        if (!line.startsWith("#")) {
-            val split = line.split(":")
-            if (split.size == 2) {
-                packagesToDelete.add(PackageInfo(name = split[0], version = split[1]))
-            }
-        }
-    }
-
-    if (packagesToDelete.isEmpty()) {
-        logger.quiet("No packages to delete!")
-        logger.quiet("Uncomment packages to delete them: ${packagesFile}")
-    } else {
-        val allPackagesToBeDeletedText = packagesToDelete.joinToString("\n") { "${it.name}:${it.version}" }
-        if (ConfirmDeletionDialog.confirm(allPackagesToBeDeletedText)) {
-            logger.quiet("Deleting ${packagesToDelete.size} packages...")
-            withSpaceClient {
-                for (pkg in packagesToDelete) {
-                    projects.packages.repositories.packages.versions.deletePackageVersion(
-                        projectId, repoId, packageName = pkg.name, packageVersion = pkg.version
-                    )
-                    logger.quiet("Deleted package: ${pkg.name}:${pkg.version}")
-                }
-            }
-            packagesFile.copyTo(packagesFile.resolveSibling(packagesFile.nameWithoutExtension + ".deleted.txt"))
-            packagesFile.delete()
-        }
-    }
 }
 
 class PackageInfo(

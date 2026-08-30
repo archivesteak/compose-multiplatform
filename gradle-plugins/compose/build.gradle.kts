@@ -1,10 +1,10 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.github.jengelman.gradle.plugins.shadow.ShadowExtension
 import de.undercouch.gradle.tasks.download.Download
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.publish.plugin)
     id("java-gradle-plugin")
     id("maven-publish")
     alias(libs.plugins.shadow.jar)
@@ -12,15 +12,20 @@ plugins {
 }
 
 gradlePluginConfig {
-    pluginId = "org.jetbrains.compose"
+    pluginId = "io.github.archivesteak.compose"
     implementationClass = "org.jetbrains.compose.ComposePlugin"
-    pluginPortalTags = listOf("ui-framework")
 }
 
 mavenPublicationConfig {
-    displayName = "JetBrains Compose Gradle Plugin"
-    description = "JetBrains Compose Gradle plugin for easy configuration"
+    displayName = "Compose Multiplatform MinGW Gradle Plugin"
+    description = "Compose Multiplatform Gradle plugin with Kotlin/Native mingwX64 support"
     artifactId = "compose-gradle-plugin"
+}
+
+extensions.configure<ShadowExtension> {
+    // The regular JAR already embeds shadowJar below. Do not add a second unclassified artifact
+    // to the Java component/publication.
+    addShadowVariantIntoJavaComponent.set(false)
 }
 
 val buildConfigDir
@@ -29,6 +34,7 @@ val buildConfig = tasks.register("buildConfig", GenerateBuildConfig::class.java)
     classFqName.set("org.jetbrains.compose.ComposeBuildConfig")
     generatedOutputDir.set(buildConfigDir)
     fieldsToGenerate.put("composeVersion", BuildProperties.composeVersion(project))
+    fieldsToGenerate.put("composeUpstreamVersion", BuildProperties.composeUpstreamVersion(project))
     fieldsToGenerate.put("composeMaterial3Version", BuildProperties.composeMaterial3Version(project))
     fieldsToGenerate.put("composeGradlePluginVersion", BuildProperties.deployVersion(project))
     fieldsToGenerate.put("composeHotReloadVersion", libs.plugin.hot.reload.get().version!!)
@@ -209,6 +215,9 @@ configureAllTests {
     dependsOn(":publishToMavenLocal")
     systemProperty("compose.tests.compose.gradle.plugin.version", BuildProperties.deployVersion(project))
     systemProperty("compose.tests.compose.version", BuildProperties.composeVersion(project))
+    System.getProperty("maven.repo.local")?.let { repository ->
+        systemProperty("maven.repo.local", repository)
+    }
     val summaryDir = project.layout.buildDirectory.get().asFile.resolve("test-summary")
     systemProperty("compose.tests.summary.file", summaryDir.resolve("$name.md").absolutePath)
     systemProperties(project.properties.filter { it.key.startsWith("compose.") })

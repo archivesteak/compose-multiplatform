@@ -57,11 +57,20 @@ class TestProject(
     private val testEnvironment: TestEnvironment
 ) {
     private val testProjectsRootDir = File("src/test/test-projects")
+    private val forkPluginResolutionInitScript =
+        testEnvironment.composeGradlePluginVersion
+            .takeIf { it.endsWith(FORK_VERSION_SUFFIX) }
+            ?.let { testEnvironment.workingDir.resolve(FORK_PLUGIN_RESOLUTION_INIT_SCRIPT) }
 
     private val additionalArgs = listOfNotNull(
         "--info",
         "--stacktrace",
         "-P${ComposeProperties.VERBOSE}=${testEnvironment.composeVerbose}",
+        forkPluginResolutionInitScript?.let { "--init-script" },
+        forkPluginResolutionInitScript?.absolutePath,
+        System.getProperty(MAVEN_LOCAL_REPOSITORY_PROPERTY)?.let { repository ->
+            "-D$MAVEN_LOCAL_REPOSITORY_PROPERTY=$repository"
+        },
         if (testEnvironment.parsedGradleVersion < GradleVersion.version("8.0")) {
             null
         } else {
@@ -84,6 +93,23 @@ class TestProject(
                 testEnvironment.replacePlaceholdersInFile(target)
             }
         }
+
+        forkPluginResolutionInitScript?.writeText(
+            """
+            gradle.beforeSettings { settings ->
+                settings.pluginManagement {
+                    resolutionStrategy {
+                        eachPlugin {
+                            if (requested.id.id == '$LEGACY_COMPOSE_PLUGIN_ID' &&
+                                requested.version == '${testEnvironment.composeGradlePluginVersion}') {
+                                useModule('$FORK_COMPOSE_PLUGIN_MODULE:${testEnvironment.composeGradlePluginVersion}')
+                            }
+                        }
+                    }
+                }
+            }
+            """.trimIndent()
+        )
     }
 
     internal fun gradle(vararg args: String): BuildResult =
@@ -174,3 +200,10 @@ class TestProject(
         }
     }
 }
+
+private const val MAVEN_LOCAL_REPOSITORY_PROPERTY = "maven.repo.local"
+private const val FORK_VERSION_SUFFIX = "-mingw"
+private const val FORK_PLUGIN_RESOLUTION_INIT_SCRIPT = ".compose-fork-plugin-resolution.init.gradle"
+private const val LEGACY_COMPOSE_PLUGIN_ID = "org.jetbrains.compose"
+private const val FORK_COMPOSE_PLUGIN_MODULE =
+    "io.github.archivesteak.compose:compose-gradle-plugin"

@@ -14,6 +14,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.compose.desktop.application.tasks.AbstractNativeMacApplicationPackageAppDirTask
 import org.jetbrains.compose.desktop.application.tasks.AbstractNativeMacApplicationPackageDmgTask
 import org.jetbrains.compose.desktop.application.tasks.AbstractNativeMacApplicationPackageTask
+import org.jetbrains.compose.desktop.application.tasks.AbstractNativeWindowsApplicationPackageAppDirTask
 import org.jetbrains.compose.desktop.tasks.AbstractUnpackDefaultComposeApplicationResourcesTask
 import org.jetbrains.compose.internal.utils.OS
 import org.jetbrains.compose.internal.utils.currentOS
@@ -21,6 +22,7 @@ import org.jetbrains.compose.internal.utils.joinLowerCamelCase
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBinary
 import org.jetbrains.kotlin.gradle.plugin.mpp.NativeOutputKind
+import org.jetbrains.kotlin.konan.target.Family
 import java.util.*
 
 internal fun configureNativeApplication(
@@ -28,14 +30,20 @@ internal fun configureNativeApplication(
     app: NativeApplication,
     unpackDefaultResources: TaskProvider<AbstractUnpackDefaultComposeApplicationResourcesTask>
 ) {
-    if (currentOS != OS.MacOS) return
-
     for (target in app._targets) {
-        configureNativeApplication(project, app, target, unpackDefaultResources)
+        when (target.konanTarget.family) {
+            Family.OSX -> if (currentOS == OS.MacOS) {
+                configureNativeMacApplication(project, app, target, unpackDefaultResources)
+            }
+            Family.MINGW -> if (currentOS == OS.Windows) {
+                configureNativeWindowsApplication(project, app, target)
+            }
+            else -> Unit
+        }
     }
 }
 
-private fun configureNativeApplication(
+private fun configureNativeMacApplication(
     project: Project,
     app: NativeApplication,
     target: KotlinNativeTarget,
@@ -43,12 +51,12 @@ private fun configureNativeApplication(
 ) {
     for (binary in target.binaries) {
         if (binary.outputKind == NativeOutputKind.EXECUTABLE) {
-            configureNativeApplication(project, app, binary, unpackDefaultResources)
+            configureNativeMacApplication(project, app, binary, unpackDefaultResources)
         }
     }
 }
 
-private fun configureNativeApplication(
+private fun configureNativeMacApplication(
     project: Project,
     app: NativeApplication,
     binary: NativeBinary,
@@ -70,12 +78,7 @@ private fun configureNativeApplication(
         copyright.set(project.provider {
             app.distributions.copyright ?: "Copyright (C) ${Calendar.getInstance().get(Calendar.YEAR)}"
         })
-        if (binary.outputKind == NativeOutputKind.EXECUTABLE) {
-            val binaryResources = (binary.compilation.associatedCompilations + binary.compilation).flatMap { compilation ->
-                compilation.allKotlinSourceSets.map { it.resources }
-            }
-            composeResourcesDirs.setFrom(binaryResources)
-        }
+        composeResourcesDirs.setFrom(binary.composeResourcesDirs())
     }
 
     if (TargetFormat.Dmg in app.distributions.targetFormats) {
@@ -90,6 +93,29 @@ private fun configureNativeApplication(
             installDir.set(project.provider {
                 app.distributions.macOS.installationPath ?: "/Applications"
             })
+        }
+    }
+}
+
+private fun configureNativeWindowsApplication(
+    project: Project,
+    app: NativeApplication,
+    target: KotlinNativeTarget,
+) {
+    for (binary in target.binaries) {
+        if (binary.outputKind != NativeOutputKind.EXECUTABLE) continue
+
+        project.tasks.composeDesktopNativeTask<AbstractNativeWindowsApplicationPackageAppDirTask>(
+            desktopNativeTaskName("createDistributableNative", binary)
+        ) {
+            packageName.set(project.provider {
+                app.distributions.packageName ?: project.name
+            })
+            destinationDir.set(nativeDestinationDir(app, binary, TargetFormat.AppImage))
+
+            dependsOn(binary.linkTaskProvider)
+            executable.set(project.layout.file(binary.linkTaskProvider.map { it.binary.outputFile }))
+            composeResourcesDirs.setFrom(binary.composeResourcesDirs())
         }
     }
 }
@@ -115,10 +141,21 @@ private fun AbstractNativeMacApplicationPackageTask.configureNativePackageTask(
         }
     )
 
-    destinationDir.set(app.distributions.outputBaseDir.dir(
-        "${app.name}/native-${binary.target.name}-${binary.buildType.name.lowercase()}-${format.id}"
-    ))
+    destinationDir.set(nativeDestinationDir(app, binary, format))
 }
+
+private fun nativeDestinationDir(
+    app: NativeApplication,
+    binary: NativeBinary,
+    format: TargetFormat,
+) = app.distributions.outputBaseDir.dir(
+    "${app.name}/native-${binary.target.name}-${binary.buildType.name.lowercase()}-${format.id}"
+)
+
+private fun NativeBinary.composeResourcesDirs() =
+    (compilation.associatedCompilations + compilation).flatMap { sourceCompilation ->
+        sourceCompilation.allKotlinSourceSets.map { it.resources }
+    }
 
 private fun desktopNativeTaskName(action: String, binary: NativeBinary): String =
     joinLowerCamelCase(action, binary.buildType.name.lowercase(), binary.target.name)

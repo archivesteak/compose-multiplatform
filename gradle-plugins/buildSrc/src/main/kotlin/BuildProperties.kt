@@ -7,13 +7,15 @@ import org.gradle.api.Project
 
 // "Global" properties
 object BuildProperties {
-    const val name = "JetBrains Compose Plugin"
-    const val group = "org.jetbrains.compose"
-    const val website = "https://kotlinlang.org/compose-multiplatform/"
-    const val vcs = "https://github.com/JetBrains/compose-multiplatform"
+    const val name = "Compose Multiplatform MinGW Plugin"
+    const val group = "io.github.archivesteak.compose"
+    const val website = "https://github.com/archivesteak/compose-multiplatform"
+    const val vcs = "https://github.com/archivesteak/compose-multiplatform"
     fun composeVersion(project: Project): String =
         System.getenv("COMPOSE_GRADLE_PLUGIN_COMPOSE_VERSION")
             ?: project.findProperty("compose.version") as String
+    fun composeUpstreamVersion(project: Project): String =
+        project.findProperty("compose.upstream.version") as String
     fun composeMaterial3Version(project: Project): String =
         project.findProperty("compose.material3.version") as String
     fun testsAndroidxCompilerVersion(project: Project): String =

@@ -1,6 +1,6 @@
 plugins {
     kotlin("multiplatform")
-    id("org.jetbrains.compose")
+    id("io.github.archivesteak.compose")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 

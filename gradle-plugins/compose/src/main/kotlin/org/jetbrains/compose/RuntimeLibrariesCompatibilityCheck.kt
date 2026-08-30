@@ -20,6 +20,8 @@ import org.gradle.work.DisableCachingByDefault
 import org.jetbrains.compose.desktop.application.internal.ComposeProperties
 import org.jetbrains.compose.internal.KOTLIN_JVM_PLUGIN_ID
 import org.jetbrains.compose.internal.KOTLIN_MPP_PLUGIN_ID
+import org.jetbrains.compose.internal.FORK_COMPOSE_ROOT_GROUP
+import org.jetbrains.compose.internal.FORK_SKIKO_GROUP
 import org.jetbrains.compose.internal.kotlinJvmExt
 import org.jetbrains.compose.internal.mppExt
 import org.jetbrains.compose.internal.utils.dependsOn
@@ -79,9 +81,11 @@ internal abstract class RuntimeLibrariesCompatibilityCheck : DefaultTask() {
     private companion object {
         val composeLibrariesForCheck = setOf(
             "org.jetbrains.compose.foundation:foundation",
-            "org.jetbrains.compose.ui:ui"
+            "org.jetbrains.compose.ui:ui",
+            "$FORK_COMPOSE_ROOT_GROUP.foundation:foundation",
+            "$FORK_COMPOSE_ROOT_GROUP.ui:ui",
         )
-        val skikoLibraryForCheck = "org.jetbrains.skiko:skiko"
+        val skikoLibrariesForCheck = setOf("org.jetbrains.skiko:skiko", "$FORK_SKIKO_GROUP:skiko")
 
         private val majorMinorRegex = """^(\d+)\.(\d+)""".toRegex()
         fun majorMinorVersion(version: String): String {
@@ -137,8 +141,8 @@ internal abstract class RuntimeLibrariesCompatibilityCheck : DefaultTask() {
         val skikoIncompatibleDependencyUsages = allDependencies.get().filter { dependency ->
             val requested = dependency.requested as? ModuleComponentSelector ?: return@filter false
             val selected = dependency.selected.moduleVersion ?: return@filter false
-            if ("${requested.group}:${requested.module}" != skikoLibraryForCheck) return@filter false
-            if ("${selected.group}:${selected.name}" != skikoLibraryForCheck) return@filter false
+            if ("${requested.group}:${requested.module}" !in skikoLibrariesForCheck) return@filter false
+            if ("${selected.group}:${selected.name}" !in skikoLibrariesForCheck) return@filter false
             majorMinorVersion(requested.version) != majorMinorVersion(selected.version)
         }
         if (skikoIncompatibleDependencyUsages.isNotEmpty()) {

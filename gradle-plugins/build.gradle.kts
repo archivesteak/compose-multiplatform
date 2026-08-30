@@ -4,7 +4,6 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
-    alias(libs.plugins.publish.plugin) apply false
     alias(libs.plugins.shadow.jar) apply false
     alias(libs.plugins.download) apply false
 }
@@ -16,7 +15,11 @@ subprojects {
     repositories {
         mavenCentral()
         google()
-        mavenLocal()
+        mavenLocal {
+            content {
+                includeGroupByRegex("io\\.github\\.archivesteak(\\..+)?")
+            }
+        }
         maven("https://packages.jetbrains.team/maven/p/kt/dev")
     }
 
@@ -31,6 +34,13 @@ subprojects {
     }
 
     plugins.withId("org.jetbrains.kotlin.jvm") {
+        // Java and Kotlin both contribute a source archive once withSourcesJar() is enabled.
+        // Publish Kotlin's complete source archive exactly once.
+        configurations.named("sourcesElements") {
+            outgoing.artifacts.clear()
+            outgoing.artifact(tasks.named("kotlinSourcesJar"))
+        }
+
         tasks.withType(KotlinJvmCompile::class).configureEach {
             compilerOptions {
                 // must be set to a language version of the kotlin compiler & runtime,
@@ -46,15 +56,6 @@ subprojects {
     plugins.withId("maven-publish") {
         configureIfExists<PublishingExtension> {
             repositories {
-                maven {
-                    name = "ComposeRepo"
-                    setUrl(System.getenv("COMPOSE_REPO_URL"))
-                    credentials {
-                        username = System.getenv("COMPOSE_REPO_USERNAME")
-                        password = System.getenv("COMPOSE_REPO_KEY")
-                    }
-                }
-
                 maven {
                     name = "LocalDir"
                     url = rootProject.buildDir.resolve("repo").toURI()
@@ -118,7 +119,6 @@ fun Project.configureGradlePlugin(
     gradlePluginConfig: GradlePluginConfigExtension
 ) {
     // gradle plugin definition (relates to gradlePlugin extension block from java-gradle-plugin)
-    // and metadata for gradle plugin portal (relates to pluginBundle extension block from com.gradle.plugin-publish)
     configureIfExists<GradlePluginDevelopmentExtension> {
         vcsUrl.set(BuildProperties.vcs)
         website.set(BuildProperties.website)
@@ -131,7 +131,6 @@ fun Project.configureGradlePlugin(
                 description = publicationConfig.description
                 implementationClass = gradlePluginConfig.implementationClass
                 version = project.version
-                tags.set(gradlePluginConfig.pluginPortalTags)
             }
         }
     }

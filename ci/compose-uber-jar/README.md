@@ -17,10 +17,5 @@ Build a jar locally by running:
 ```
 The jar will be available at `build/libs/compose-full.jar`
 
-### Publishing
-
-```
-export COMPOSE_REPO_USERNAME=<COMPOSE_REPO_USERNAME>
-export COMPOSE_REPO_KEY=<COMPOSE_REPO_KEY>
-./gradlew publishToComposeRepo
-```
+Remote publication is intentionally unavailable on this fork branch. Build the JAR locally with
+`shadowJar` and inspect it directly.

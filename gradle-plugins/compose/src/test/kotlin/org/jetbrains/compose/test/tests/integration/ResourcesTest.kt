@@ -19,6 +19,7 @@ import org.jetbrains.compose.test.utils.modify
 import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 import kotlin.io.path.Path
 import kotlin.io.path.invariantSeparatorsPathString
@@ -665,8 +666,8 @@ class ResourcesTest : GradlePluginTestBase() {
 
         modifyText("build.gradle.kts") { str ->
             str.replace(
-                "api(\"org.jetbrains.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")",
-                "//api(\"org.jetbrains.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")"
+                "api(\"io.github.archivesteak.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")",
+                "//api(\"io.github.archivesteak.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")"
             )
         }
         gradle("prepareKotlinIdeaImport").checks {
@@ -675,8 +676,8 @@ class ResourcesTest : GradlePluginTestBase() {
 
         modifyText("build.gradle.kts") { str ->
             str.replace(
-                "//api(\"org.jetbrains.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")",
-                "api(\"org.jetbrains.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")"
+                "//api(\"io.github.archivesteak.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")",
+                "api(\"io.github.archivesteak.compose.components:components-resources:${defaultTestEnvironment.composeVersion}\")"
             )
         }
         modifyText("build.gradle.kts") { str ->
@@ -828,7 +829,7 @@ class ResourcesTest : GradlePluginTestBase() {
                     |plugins {
                     |    kotlin("multiplatform")
                     |    kotlin("plugin.compose")
-                    |    id("org.jetbrains.compose")
+                    |    id("io.github.archivesteak.compose")
                     |}
                     |
                     |kotlin {
@@ -850,9 +851,9 @@ class ResourcesTest : GradlePluginTestBase() {
                     |    sourceSets {
                     |        commonMain {
                     |            dependencies {
-                    |                implementation("org.jetbrains.compose.runtime:runtime:${defaultTestEnvironment.composeVersion}")
-                    |                implementation("org.jetbrains.compose.material:material:${defaultTestEnvironment.composeVersion}")
-                    |                implementation("org.jetbrains.compose.components:components-resources:${defaultTestEnvironment.composeVersion}")
+                    |                implementation("io.github.archivesteak.compose.runtime:runtime:${defaultTestEnvironment.composeVersion}")
+                    |                implementation("io.github.archivesteak.compose.material:material:${defaultTestEnvironment.composeVersion}")
+                    |                implementation("io.github.archivesteak.compose.components:components-resources:${defaultTestEnvironment.composeVersion}")
                     |            }
                     |        }
                     |    }
@@ -877,7 +878,7 @@ class ResourcesTest : GradlePluginTestBase() {
                     |plugins {
                     |    kotlin("multiplatform")
                     |    kotlin("plugin.compose")
-                    |    id("org.jetbrains.compose")
+                    |    id("io.github.archivesteak.compose")
                     |}
                     |
                     |kotlin {
@@ -897,9 +898,9 @@ class ResourcesTest : GradlePluginTestBase() {
                     |    sourceSets {
                     |        commonMain {
                     |            dependencies {
-                    |                implementation("org.jetbrains.compose.runtime:runtime:${defaultTestEnvironment.composeVersion}")
-                    |                implementation("org.jetbrains.compose.material:material:${defaultTestEnvironment.composeVersion}")
-                    |                implementation("org.jetbrains.compose.components:components-resources:${defaultTestEnvironment.composeVersion}")
+                    |                implementation("io.github.archivesteak.compose.runtime:runtime:${defaultTestEnvironment.composeVersion}")
+                    |                implementation("io.github.archivesteak.compose.material:material:${defaultTestEnvironment.composeVersion}")
+                    |                implementation("io.github.archivesteak.compose.components:components-resources:${defaultTestEnvironment.composeVersion}")
                     |            }
                     |        }
                     |    }
@@ -1125,6 +1126,67 @@ class ResourcesTest : GradlePluginTestBase() {
                     "build/compose/binaries/main/native-macosArm64-debug-app-image/${appName}.app/Contents/Resources"
                 file("$targetResourcesDir/compose-resources/composeResources/appleresources.generated.resources/drawable/compose-multiplatform.xml").checkExists()
                 file("$targetResourcesDir/compose-resources/composeResources/appleresources.generated.resources/drawable/icon.xml").checkExists()
+            }
+        }
+    }
+
+    @Test
+    fun mingwExecutableResourcesAndAccessors() {
+        Assumptions.assumeTrue(currentOS == OS.Windows)
+        with(testProject("misc/mingwNativeResources")) {
+            gradle(
+                ":generateComposeResClass",
+                ":generateResourceAccessorsForCommonMain",
+                ":generateResourceAccessorsForMingwX64Main",
+                ":generateActualResourceCollectorsForMingwX64Main",
+            ).checks {
+                check.taskSuccessful(":generateComposeResClass")
+                check.taskSuccessful(":generateResourceAccessorsForCommonMain")
+                check.taskSuccessful(":generateResourceAccessorsForMingwX64Main")
+                check.taskSuccessful(":generateActualResourceCollectorsForMingwX64Main")
+
+                val generatedSources = file("build/generated/compose/resourceGenerator/kotlin")
+                    .walkTopDown()
+                    .filter { it.isFile && it.extension == "kt" }
+                    .joinToString("\n") { it.readText() }
+                assertTrue(generatedSources.contains("object Res"))
+                assertTrue(generatedSources.contains("val Res.drawable.common"))
+                assertTrue(generatedSources.contains("val Res.drawable.windows"))
+            }
+
+            gradle(":createDistributableNativeDebugMingwX64").checks {
+                check.taskSuccessful(":copyDebugExecutableMingwX64ComposeResources")
+                check.taskSuccessful(":linkDebugExecutableMingwX64")
+                check.taskSuccessful(":createDistributableNativeDebugMingwX64")
+
+                val appDir = "build/compose/binaries/main/native-mingwX64-debug-app-image"
+                val packagedExecutable = file("$appDir/Test Resources.exe")
+                packagedExecutable.checkExists()
+                val resourcesDir =
+                    "$appDir/compose-resources/composeResources/mingwresources.generated.resources/drawable"
+                file("$resourcesDir/common.svg").checkExists()
+                file("$resourcesDir/windows.svg").checkExists()
+                file(
+                    "$appDir/compose-resources/composeResources/" +
+                        "mingwresources.generated.resources/files/device-🙂.txt"
+                ).checkExists()
+
+                file(
+                    "build/bin/mingwX64/debugExecutable/compose-resources/composeResources/" +
+                        "mingwresources.generated.resources/drawable/common.svg"
+                ).checkExists()
+
+                val unrelatedWorkingDirectory = file("unrelated-working-directory").apply { mkdirs() }
+                val process = ProcessBuilder(packagedExecutable.absolutePath)
+                    .directory(unrelatedWorkingDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val finished = process.waitFor(30, TimeUnit.SECONDS)
+                if (!finished) process.destroyForcibly()
+                assertTrue(finished, "Packaged executable did not finish in 30 seconds")
+                val processOutput = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.exitValue(), processOutput)
+                assertTrue("WINDOWS_DEVICE_RESOURCES_OK" in processOutput, processOutput)
             }
         }
     }

@@ -1,6 +1,8 @@
 package org.jetbrains.compose.desktop.preview.tasks
 
 import org.gradle.api.file.FileCollection
+import org.jetbrains.compose.internal.FORK_COMPOSE_ROOT_GROUP
+import org.jetbrains.compose.internal.FORK_SKIKO_GROUP
 import org.gradle.api.logging.Logger as GradleLogger
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -49,7 +51,7 @@ abstract class AbstractConfigureDesktopPreviewTask : AbstractComposeDesktopTask(
     @get:Classpath
     internal val uiTooling: FileCollection =
         project.detachedComposeDependency(
-            groupId = "org.jetbrains.compose.ui",
+            groupId = "$FORK_COMPOSE_ROOT_GROUP.ui",
             artifactId = "ui-tooling-desktop",
         ).excludeTransitiveDependencies()
 
@@ -111,7 +113,7 @@ abstract class AbstractConfigureDesktopPreviewTask : AbstractComposeDesktopTask(
 
             if (hasSkikoJvm && !skikoVersion.isNullOrBlank()) {
                 return project.detachedDependency(
-                    groupId = "org.jetbrains.skiko",
+                    groupId = FORK_SKIKO_GROUP,
                     artifactId = "skiko-awt-runtime-${currentTarget.id}",
                     version = skikoVersion
                 ).excludeTransitiveDependencies()

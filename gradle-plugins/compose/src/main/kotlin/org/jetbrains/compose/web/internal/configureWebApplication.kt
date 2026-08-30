@@ -9,9 +9,13 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.Dependency
 import org.gradle.api.artifacts.ResolvedDependency
 import org.gradle.api.artifacts.UnresolvedDependency
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.attributes.Attribute
+import org.gradle.api.attributes.AttributeContainer
+import org.gradle.api.attributes.Usage
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Copy
@@ -19,9 +23,10 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
 import org.gradle.language.jvm.tasks.ProcessResources
 import org.gradle.work.DisableCachingByDefault
-import org.jetbrains.compose.ComposeBuildConfig
 import org.jetbrains.compose.ComposeExtension
-import org.jetbrains.compose.internal.utils.detachedComposeDependency
+import org.jetbrains.compose.internal.FORK_COMPOSE_ROOT_GROUP
+import org.jetbrains.compose.internal.FORK_SKIKO_GROUP
+import org.jetbrains.compose.internal.utils.detachedDependency
 import org.jetbrains.compose.internal.utils.file
 import org.jetbrains.compose.internal.utils.registerTask
 import org.jetbrains.compose.web.WebExtension
@@ -38,8 +43,8 @@ internal fun Project.configureWeb(
 
     // here we check all dependencies (including transitive)
     // If there is compose.ui, then skiko is required!
-    val shouldRunUnpackSkiko = project.provider {
-        webExt.targetsToConfigure(project).any { target ->
+    val composeUiRuntime = project.provider {
+        val coordinates = webExt.targetsToConfigure(project).flatMap { target ->
             val compilation = target.compilations.getByName("main")
             val compileConfiguration = compilation.compileDependencyConfigurationName
             val runtimeConfiguration = compilation.runtimeDependencyConfigurationName
@@ -48,67 +53,100 @@ internal fun Project.configureWeb(
                 project.configurations.findByName(name)
             }.flatMap { configuration ->
                 configuration.incoming.resolutionResult.allComponents.map { it.id }
-            }.any { identifier ->
-                if (identifier is ModuleComponentIdentifier) {
-                    identifier.group == "org.jetbrains.compose.ui" && identifier.module == "ui"
-                } else {
-                    false
-                }
+            }.mapNotNull { identifier ->
+                (identifier as? ModuleComponentIdentifier)
+                    ?.takeIf { it.group in COMPOSE_UI_GROUPS && it.module == "ui" }
+                    ?.let { ComposeUiCoordinates(it.group, it.version) }
             }
         }
+        ComposeUiRuntime(selectComposeUiCoordinates(coordinates))
     }
 
     val targets = webExt.targetsToConfigure(project)
 
     // configure only if there is k/wasm or k/js target:
     if (targets.isNotEmpty()) {
-        configureWebApplication(targets, project, shouldRunUnpackSkiko)
+        configureWebApplication(targets, project, composeUiRuntime)
     }
 }
 
 internal fun configureWebApplication(
     targets: Collection<KotlinJsIrTarget>,
     project: Project,
-    shouldRunUnpackSkiko: Provider<Boolean>
+    composeUiRuntime: Provider<ComposeUiRuntime>
 ) {
-    val skikoJsWasmRuntimeConfiguration = project.configurations.create("COMPOSE_SKIKO_JS_WASM_RUNTIME")
-    val skikoJsWasmRuntimeDependency = skikoVersionProvider(project).map { skikoVersion ->
-        project.dependencies.create("org.jetbrains.skiko:skiko-js-wasm-runtime:$skikoVersion")
-    }
-    skikoJsWasmRuntimeConfiguration.defaultDependencies {
-        it.addLater(skikoJsWasmRuntimeDependency)
-    }
-
-    val unpackedRuntimeDir = project.layout.buildDirectory.dir("compose/skiko-for-web-runtime")
-    val processedRuntimeDir = project.layout.buildDirectory.dir("compose/skiko-runtime-processed-wasmjs")
-    val taskName = "unpackSkikoWasmRuntime"
-
-    val unpackRuntime = project.registerTask<UnpackSkikoWasmRuntimeTask>(taskName) {
-        onlyIf {
-            shouldRunUnpackSkiko.get()
-        }
-
-        skikoRuntimeFiles = skikoJsWasmRuntimeConfiguration
-        outputDir.set(unpackedRuntimeDir)
-    }
-
-    val processSkikoRuntimeForKWasm = project.registerTask<Copy>("processSkikoRuntimeForKWasm") {
-        dependsOn(unpackRuntime)
-        from(unpackedRuntimeDir)
-        into(processedRuntimeDir)
-    }
+    // Keep the established lifecycle task names for build scripts that inspect them, while each
+    // target resolves and unpacks the runtime variant matching its own JS/Wasm attributes.
+    val unpackAllWebRuntimes = project.registerTask<DefaultTask>("unpackSkikoWasmRuntime") {}
+    val processAllWasmRuntimes = project.registerTask<DefaultTask>("processSkikoRuntimeForKWasm") {}
 
     targets.forEach { target ->
+        val titledTargetName = target.name.replaceFirstChar { it.titlecase() }
+        val mainCompilation = target.compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME)
+        val targetRuntimeConfiguration = project.configurations.getByName(
+            mainCompilation.runtimeDependencyConfigurationName
+        )
+        val upstreamRuntime = project.configurations.create(
+            "composeUpstreamSkikoRuntimeFor$titledTargetName"
+        ).apply {
+            isCanBeConsumed = false
+            defaultDependencies { dependencies ->
+                composeUiRuntime.get().coordinates
+                    ?.takeIf { it.group == UPSTREAM_COMPOSE_UI_GROUP }
+                    ?.let { dependencies.add(project.skikoWebRuntimeDependency(it)) }
+            }
+        }
+        val forkRuntime = project.configurations.create(
+            "composeForkSkikoRuntimeFor$titledTargetName"
+        ).apply {
+            isCanBeConsumed = false
+            copySkikoRuntimeAttributes(
+                project,
+                from = targetRuntimeConfiguration.attributes,
+                to = attributes,
+            )
+            defaultDependencies { dependencies ->
+                composeUiRuntime.get().coordinates
+                    ?.takeIf { it.group == FORK_COMPOSE_UI_GROUP }
+                    ?.let { dependencies.add(project.skikoWebRuntimeDependency(it)) }
+            }
+        }
+        val skikoRuntimeFiles = upstreamRuntime + forkRuntime
+        val unpackedRuntimeDir = project.layout.buildDirectory.dir(
+            "compose/skiko-${target.name}-for-web-runtime"
+        )
+        val unpackRuntime = project.registerTask<UnpackSkikoWasmRuntimeTask>(
+            "unpackSkikoWasmRuntimeFor$titledTargetName"
+        ) {
+            onlyIf { composeUiRuntime.get().coordinates != null }
+            this.skikoRuntimeFiles = skikoRuntimeFiles
+            outputDir.set(unpackedRuntimeDir)
+        }
+        unpackAllWebRuntimes.configure { task -> task.dependsOn(unpackRuntime) }
+
+        val processWasmRuntime = if (target.wasmTargetType != null) {
+            project.registerTask<Copy>("processSkikoRuntimeForK${titledTargetName}") {
+                dependsOn(unpackRuntime)
+                from(unpackedRuntimeDir)
+                into(project.layout.buildDirectory.dir("compose/skiko-${target.name}-runtime-processed"))
+            }.also { processTask ->
+                processAllWasmRuntimes.configure { task -> task.dependsOn(processTask) }
+            }
+        } else {
+            null
+        }
+
         target.compilations.all { compilation ->
             // `wasmTargetType` is available starting with kotlin 1.9.2x
             if (target.wasmTargetType != null) {
+                val processTask = checkNotNull(processWasmRuntime)
                 // Kotlin/Wasm uses ES module system to depend on skiko through skiko.mjs.
                 // Further bundler could process all files by its own (both skiko.mjs and skiko.wasm) and then emits its own version.
                 // So that’s why we need to provide skiko.mjs and skiko.wasm only for webpack, but not in the final dist.
                 compilation.binaries.all {
                     it.linkSyncTask.configure {
-                        it.dependsOn(processSkikoRuntimeForKWasm)
-                        it.from.from(processedRuntimeDir)
+                        it.dependsOn(processTask)
+                        it.from.from(processTask.map { task -> task.destinationDir })
                     }
                 }
             } else {
@@ -200,23 +238,85 @@ private fun Project.testCompilationDependsOnSkiko(target: KotlinJsIrTarget): Boo
     }
 }
 
-private const val SKIKO_GROUP = "org.jetbrains.skiko"
+internal data class ComposeUiCoordinates(val group: String, val version: String)
 
-private fun skikoVersionProvider(project: Project): Provider<String> {
-    val composeVersion = ComposeBuildConfig.composeVersion
-    val configurationWithSkiko = project.detachedComposeDependency(
-        artifactId = "ui-graphics",
-        groupId = "org.jetbrains.compose.ui"
-    )
-    return project.provider {
-        val skikoDependency = configurationWithSkiko.allDependenciesDescriptors.firstOrNull(::isSkikoDependency)
-        skikoDependency?.version
-            ?: error("Cannot determine the version of Skiko for Compose '$composeVersion'")
+internal data class ComposeUiRuntime(val coordinates: ComposeUiCoordinates?)
+
+internal data class SkikoRuntimeModule(val group: String, val artifact: String)
+
+internal fun selectComposeUiCoordinates(
+    coordinates: Iterable<ComposeUiCoordinates>
+): ComposeUiCoordinates? {
+    val distinctCoordinates = coordinates.toSet()
+    if (distinctCoordinates.size > 1) {
+        throw GradleException(
+            "Compose UI dependencies must use one group and version in a project; found " +
+                distinctCoordinates.sortedWith(compareBy(ComposeUiCoordinates::group, ComposeUiCoordinates::version))
+                    .joinToString { "${it.group}:ui:${it.version}" }
+        )
     }
+    return distinctCoordinates.singleOrNull()
+}
+
+internal fun skikoRuntimeModuleForComposeUiGroup(composeUiGroup: String): SkikoRuntimeModule = when (composeUiGroup) {
+    UPSTREAM_COMPOSE_UI_GROUP -> SkikoRuntimeModule(
+        group = UPSTREAM_SKIKO_GROUP,
+        artifact = "skiko-js-wasm-runtime",
+    )
+    FORK_COMPOSE_UI_GROUP -> SkikoRuntimeModule(
+        group = FORK_SKIKO_GROUP,
+        artifact = "skiko",
+    )
+    else -> throw GradleException("Unsupported Compose UI group '$composeUiGroup'")
+}
+
+internal fun copySkikoRuntimeAttributes(
+    project: Project,
+    from: AttributeContainer,
+    to: AttributeContainer,
+) {
+    from.keySet().forEach { attribute ->
+        @Suppress("UNCHECKED_CAST")
+        to.attribute(
+            attribute as Attribute<Any>,
+            checkNotNull(from.getAttribute(attribute)) as Any,
+        )
+    }
+    to.attribute(
+        Usage.USAGE_ATTRIBUTE,
+        project.objects.named(Usage::class.java, SKIKO_RUNTIME_USAGE),
+    )
+}
+
+private const val UPSTREAM_COMPOSE_UI_GROUP = "org.jetbrains.compose.ui"
+private const val UPSTREAM_SKIKO_GROUP = "org.jetbrains.skiko"
+private const val FORK_COMPOSE_UI_GROUP = "$FORK_COMPOSE_ROOT_GROUP.ui"
+private const val SKIKO_RUNTIME_USAGE = "skiko-runtime"
+private val COMPOSE_UI_GROUPS = setOf(UPSTREAM_COMPOSE_UI_GROUP, FORK_COMPOSE_UI_GROUP)
+private val SKIKO_GROUPS = setOf(UPSTREAM_SKIKO_GROUP, FORK_SKIKO_GROUP)
+
+private fun Project.skikoWebRuntimeDependency(composeUi: ComposeUiCoordinates): Dependency {
+    val runtimeModule = skikoRuntimeModuleForComposeUiGroup(composeUi.group)
+    val configurationWithSkiko = detachedDependency(
+        artifactId = "ui-graphics",
+        groupId = composeUi.group,
+        version = composeUi.version,
+    )
+    val skikoVersions = configurationWithSkiko.allDependenciesDescriptors
+        .filter { dependency -> dependency.group == runtimeModule.group }
+        .mapNotNull(DependencyDescriptor::version)
+        .toSet()
+    if (skikoVersions.size != 1) {
+        error(
+            "Cannot determine one Skiko version from ${composeUi.group}:ui-graphics:${composeUi.version}; " +
+                "found ${skikoVersions.sorted()}"
+        )
+    }
+    return dependencies.create("${runtimeModule.group}:${runtimeModule.artifact}:${skikoVersions.single()}")
 }
 
 private fun isSkikoDependency(dep: DependencyDescriptor): Boolean =
-    dep.group == SKIKO_GROUP && dep.version != null
+    dep.group in SKIKO_GROUPS && dep.version != null
 
 private val Configuration.allDependenciesDescriptors: Sequence<DependencyDescriptor>
     get() = with (resolvedConfiguration.lenientConfiguration) {

@@ -27,7 +27,6 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
     implementation("io.ktor:ktor-client-core:3.1.3")
-    implementation("io.ktor:ktor-client-cio:3.1.3")
     implementation("io.ktor:ktor-client-okhttp:3.1.3")
     implementation("org.apache.tika:tika-parsers:1.24.1")
     implementation("org.jsoup:jsoup:1.14.3")

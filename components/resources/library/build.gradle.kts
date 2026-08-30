@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("multiplatform")
-    id("org.jetbrains.compose")
+    id("io.github.archivesteak.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("maven-publish")
     id("com.android.library")
@@ -47,6 +47,7 @@ kotlin {
         binaries.executable()
     }
     macosArm64()
+    mingwX64()
 
     applyDefaultHierarchyTemplate()
     sourceSets {
@@ -199,7 +200,7 @@ android {
 }
 
 configureMavenPublication(
-    groupId = "org.jetbrains.compose.components",
+    groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-resources",
     name = "Resources for Compose JB"
 )
