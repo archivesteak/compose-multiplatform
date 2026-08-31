@@ -31,6 +31,7 @@ kotlin {
         }
     }
     macosArm64()
+    mingwX64()
 
     applyDefaultHierarchyTemplate()
 
@@ -56,6 +57,9 @@ kotlin {
 
         val wasmJsMain by getting
         wasmJsMain.dependsOn(nonAndroidMain)
+
+        val mingwX64Main by getting
+        mingwX64Main.dependsOn(nonAndroidMain)
     }
 }
 
@@ -73,8 +77,7 @@ android {
 }
 
 configureMavenPublication(
-    groupId = "org.jetbrains.compose.components",
+    groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-ui-tooling-preview",
-    name = "Experimental Compose Multiplatform tooling library API. This library provides the API required to declare " +
-            "@Preview composables in user apps."
+    name = "Compose Multiplatform tooling preview API"
 )

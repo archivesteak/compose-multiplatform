@@ -8,6 +8,7 @@ package org.jetbrains.compose.test.utils
 import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.util.GradleVersion
+import org.jetbrains.compose.ComposeBuildConfig
 import org.jetbrains.compose.desktop.application.internal.ComposeProperties
 import java.io.File
 import java.util.*
@@ -19,6 +20,8 @@ data class TestEnvironment(
     val agpVersion: String = TestProperties.agpVersion,
     val composeGradlePluginVersion: String = TestProperties.composeGradlePluginVersion,
     val composeVersion: String = TestProperties.composeVersion,
+    val composeMaterial3Version: String = ComposeBuildConfig.composeMaterial3Version,
+    val composeUpstreamVersion: String = ComposeBuildConfig.composeUpstreamVersion,
     val mokoResourcesPluginVersion: String = "0.23.0",
     val composeCompilerPlugin: String? = null,
     val composeCompilerArgs: String? = null,
@@ -29,6 +32,8 @@ data class TestEnvironment(
     private val placeholders = linkedMapOf(
         "COMPOSE_GRADLE_PLUGIN_VERSION_PLACEHOLDER" to composeGradlePluginVersion,
         "COMPOSE_VERSION_PLACEHOLDER" to composeVersion,
+        "COMPOSE_MATERIAL3_VERSION_PLACEHOLDER" to composeMaterial3Version,
+        "COMPOSE_UPSTREAM_VERSION_PLACEHOLDER" to composeUpstreamVersion,
         "KOTLIN_VERSION_PLACEHOLDER" to kotlinVersion,
         "AGP_VERSION_PLACEHOLDER" to agpVersion,
         "COMPOSE_COMPILER_PLUGIN_PLACEHOLDER" to composeCompilerPlugin,
@@ -57,17 +62,11 @@ class TestProject(
     private val testEnvironment: TestEnvironment
 ) {
     private val testProjectsRootDir = File("src/test/test-projects")
-    private val forkPluginResolutionInitScript =
-        testEnvironment.composeGradlePluginVersion
-            .takeIf { it.endsWith(FORK_VERSION_SUFFIX) }
-            ?.let { testEnvironment.workingDir.resolve(FORK_PLUGIN_RESOLUTION_INIT_SCRIPT) }
 
     private val additionalArgs = listOfNotNull(
         "--info",
         "--stacktrace",
         "-P${ComposeProperties.VERBOSE}=${testEnvironment.composeVerbose}",
-        forkPluginResolutionInitScript?.let { "--init-script" },
-        forkPluginResolutionInitScript?.absolutePath,
         System.getProperty(MAVEN_LOCAL_REPOSITORY_PROPERTY)?.let { repository ->
             "-D$MAVEN_LOCAL_REPOSITORY_PROPERTY=$repository"
         },
@@ -94,22 +93,6 @@ class TestProject(
             }
         }
 
-        forkPluginResolutionInitScript?.writeText(
-            """
-            gradle.beforeSettings { settings ->
-                settings.pluginManagement {
-                    resolutionStrategy {
-                        eachPlugin {
-                            if (requested.id.id == '$LEGACY_COMPOSE_PLUGIN_ID' &&
-                                requested.version == '${testEnvironment.composeGradlePluginVersion}') {
-                                useModule('$FORK_COMPOSE_PLUGIN_MODULE:${testEnvironment.composeGradlePluginVersion}')
-                            }
-                        }
-                    }
-                }
-            }
-            """.trimIndent()
-        )
     }
 
     internal fun gradle(vararg args: String): BuildResult =
@@ -202,8 +185,3 @@ class TestProject(
 }
 
 private const val MAVEN_LOCAL_REPOSITORY_PROPERTY = "maven.repo.local"
-private const val FORK_VERSION_SUFFIX = "-mingw"
-private const val FORK_PLUGIN_RESOLUTION_INIT_SCRIPT = ".compose-fork-plugin-resolution.init.gradle"
-private const val LEGACY_COMPOSE_PLUGIN_ID = "org.jetbrains.compose"
-private const val FORK_COMPOSE_PLUGIN_MODULE =
-    "io.github.archivesteak.compose:compose-gradle-plugin"

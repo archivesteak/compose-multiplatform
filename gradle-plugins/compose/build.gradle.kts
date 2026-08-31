@@ -106,11 +106,20 @@ val shadow = tasks.named<ShadowJar>("shadowJar") {
     exclude("META-INF/versions/**")
 }
 
-val jar = tasks.named<Jar>("jar") {
-    dependsOn(shadow)
-    from(zipTree(shadow.get().archiveFile))
-    this.duplicatesStrategy = DuplicatesStrategy.INCLUDE
+// The shadow task already contains this project's classes and resources after relocating embedded
+// dependencies. Re-zipping it into the regular JAR used to add every project entry twice and left
+// both relocated and unrelocated bytecode under the same path. Publish the single, canonical
+// shadow archive through the Java variants instead.
+tasks.named<Jar>("jar") {
+    enabled = false
 }
+listOf("apiElements", "runtimeElements").forEach { configurationName ->
+    configurations.named(configurationName) {
+        outgoing.artifacts.clear()
+        outgoing.artifact(shadow)
+    }
+}
+val pluginJar = shadow
 
 val supportedGradleVersions = project.propertyList("compose.tests.gradle.versions")
 val supportedAgpVersions = project.propertyList("compose.tests.agp.versions")
@@ -125,14 +134,14 @@ val gradleTestsPattern = "org.jetbrains.compose.test.tests.integration.*"
 
 // check we don't accidentally including unexpected classes (e.g. from embedded dependencies)
 tasks.registerVerificationTask<CheckJarPackagesTask>("checkJar") {
-    dependsOn(jar)
-    jarFile.set(jar.archiveFile)
+    dependsOn(pluginJar)
+    jarFile.set(pluginJar.flatMap { it.archiveFile })
     allowedPackagePrefixes.addAll("org.jetbrains.compose", "kotlinx.serialization", "com.squareup.kotlinpoet")
 }
 
 tasks.test {
-    dependsOn(jar)
-    classpath = project.files(jar.map { it.archiveFile }) + classpath
+    dependsOn(pluginJar)
+    classpath = project.files(pluginJar.flatMap { it.archiveFile }) + classpath
     filter {
         excludeTestsMatching(gradleTestsPattern)
     }

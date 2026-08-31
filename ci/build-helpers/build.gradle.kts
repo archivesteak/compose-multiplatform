@@ -55,7 +55,7 @@ fun PublishingExtension.configurePublishing(project: Project) {
         }
         maven {
             name = "BuildRepo"
-            url = uri("${rootProject.buildDir}/repo")
+            url = rootProject.layout.buildDirectory.dir("repo").get().asFile.toURI()
         }
     }
     publications {

@@ -4,7 +4,7 @@ pluginManagement {
     plugins {
         id("org.jetbrains.kotlin.multiplatform") version "KOTLIN_VERSION_PLACEHOLDER"
         id("org.jetbrains.kotlin.plugin.compose") version "KOTLIN_VERSION_PLACEHOLDER"
-        id("org.jetbrains.compose") version "COMPOSE_GRADLE_PLUGIN_VERSION_PLACEHOLDER"
+        id("io.github.archivesteak.compose") version "COMPOSE_GRADLE_PLUGIN_VERSION_PLACEHOLDER"
     }
     repositories {
         google {
@@ -16,7 +16,10 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
-        mavenLocal()
+        exclusiveContent {
+            forRepository { mavenLocal() }
+            filter { includeGroupByRegex("io\\.github\\.archivesteak(\\..*)?") }
+        }
     }
 }
 
@@ -33,6 +36,9 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
-        mavenLocal()
+        exclusiveContent {
+            forRepository { mavenLocal() }
+            filter { includeGroupByRegex("io\\.github\\.archivesteak(\\..*)?") }
+        }
     }
 }

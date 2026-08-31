@@ -13,6 +13,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.compose.internal.publishing.utils.retry
 import org.jsoup.Jsoup
+import java.net.URI
 import java.net.URL
 
 @Suppress("unused") // public api
@@ -45,7 +46,7 @@ abstract class DownloadFromSpaceMavenRepoTask : DefaultTask() {
             val lastPart = href.substringAfterLast("/", "")
             // check if URL points to a file
             if (lastPart.isNotEmpty() && lastPart.contains(".")) {
-                downloadableFiles[lastPart] = URL(href)
+                downloadableFiles[lastPart] = URI.create(href).toURL()
             }
         }
 

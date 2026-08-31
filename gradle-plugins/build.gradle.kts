@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
@@ -11,17 +12,6 @@ plugins {
 subprojects {
     group = BuildProperties.group
     version = BuildProperties.deployVersion(project)
-
-    repositories {
-        mavenCentral()
-        google()
-        mavenLocal {
-            content {
-                includeGroupByRegex("io\\.github\\.archivesteak(\\..+)?")
-            }
-        }
-        maven("https://packages.jetbrains.team/maven/p/kt/dev")
-    }
 
     plugins.withId("java") {
         configureIfExists<JavaPluginExtension> {
@@ -62,6 +52,18 @@ subprojects {
                 }
             }
         }
+
+        tasks.withType<PublishToMavenRepository>().configureEach {
+            // Gradle assigns the repository after creating the publication task. Inspecting it
+            // while the task is merely being realized (for example by `tasks --all`) can observe
+            // the temporary null state; the execution guard still runs before every publish action.
+            doFirst {
+                check(repository.url.scheme.equals("file", ignoreCase = true)) {
+                    "Remote publication is disabled while the fork publication freeze is active: " +
+                        repository.url
+                }
+            }
+        }
     }
 
     afterEvaluate {
@@ -74,6 +76,7 @@ subprojects {
                 // https://github.com/gradle/gradle/issues/10384
                 configureMavenPublication("pluginMaven", publicationConfig)
                 configureGradlePlugin(publicationConfig, gradlePluginConfig)
+                configurePluginMarkerPublications(publicationConfig)
             } else {
                 configureMavenPublication("maven", publicationConfig) {
                     from(components["java"])
@@ -103,13 +106,59 @@ fun Project.configureMavenPublication(
                 licenses {
                     license {
                         name.set("The Apache License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                     }
+                }
+                developers {
+                    developer {
+                        id.set("archivesteak")
+                        name.set("archivesteak")
+                        url.set("https://github.com/archivesteak")
+                    }
+                }
+                scm {
+                    url.set(BuildProperties.vcs)
+                    connection.set("scm:git:${BuildProperties.vcs}.git")
+                    developerConnection.set("scm:git:ssh://git@github.com/archivesteak/compose-multiplatform.git")
                 }
             }
 
             customize()
         }
+    }
+}
+
+fun Project.configurePluginMarkerPublications(config: MavenPublicationConfigExtension) {
+    configureIfExists<PublishingExtension> {
+        publications.withType<MavenPublication>()
+            .matching { publication -> publication.name.endsWith("PluginMarkerMaven") }
+            .configureEach {
+                pom {
+                    name.set(config.displayName)
+                    description.set(config.description)
+                    url.set(BuildProperties.website)
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    developers {
+                        developer {
+                            id.set("archivesteak")
+                            name.set("archivesteak")
+                            url.set("https://github.com/archivesteak")
+                        }
+                    }
+                    scm {
+                        url.set(BuildProperties.vcs)
+                        connection.set("scm:git:${BuildProperties.vcs}.git")
+                        developerConnection.set(
+                            "scm:git:ssh://git@github.com/archivesteak/compose-multiplatform.git"
+                        )
+                    }
+                }
+            }
     }
 }
 

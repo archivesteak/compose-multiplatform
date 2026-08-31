@@ -13,10 +13,15 @@ on:
 
 jobs:
   benchmarks-macos-arm64:
+    permissions:
+      contents: read
+    timeout-minutes: 60
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: 'corretto'
           java-version: '17'
@@ -27,10 +32,15 @@ jobs:
           ./gradlew :benchmarks:runReleaseExecutableMacosArm64
 
   benchmarks-desktop-jvm:
+    permissions:
+      contents: read
+    timeout-minutes: 60
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-java@v4
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
       with:
         distribution: 'corretto'
         java-version: '17'
@@ -43,10 +53,15 @@ jobs:
   benchmarks-wasm-d8:
     # temporarily disabled after Compose update
     if: false
+    permissions:
+      contents: read
+    timeout-minutes: 60
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: 'corretto'
           java-version: '17'

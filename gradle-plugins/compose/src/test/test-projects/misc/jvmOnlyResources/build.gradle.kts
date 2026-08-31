@@ -1,5 +1,5 @@
 plugins {
-    id("org.jetbrains.compose")
+    id("io.github.archivesteak.compose")
     kotlin("plugin.compose")
     kotlin("jvm")
 }
@@ -8,6 +8,6 @@ group = "me.app"
 
 dependencies {
     implementation(compose.desktop.currentOs)
-    implementation("org.jetbrains.compose.components:components-resources:COMPOSE_VERSION_PLACEHOLDER")
+    implementation("io.github.archivesteak.compose.components:components-resources:COMPOSE_VERSION_PLACEHOLDER")
 }
 

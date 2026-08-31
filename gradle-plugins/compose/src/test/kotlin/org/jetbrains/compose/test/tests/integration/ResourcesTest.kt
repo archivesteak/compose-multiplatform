@@ -1134,6 +1134,11 @@ class ResourcesTest : GradlePluginTestBase() {
     fun mingwExecutableResourcesAndAccessors() {
         Assumptions.assumeTrue(currentOS == OS.Windows)
         with(testProject("misc/mingwNativeResources")) {
+            gradle(":linkDebugTestMingwX64", "--dry-run").checks {
+                check.logContains(":syncDebugTestMingwX64ComposeResources SKIPPED")
+                check.logContains(":linkDebugTestMingwX64 SKIPPED")
+            }
+
             gradle(
                 ":generateComposeResClass",
                 ":generateResourceAccessorsForCommonMain",
@@ -1155,7 +1160,7 @@ class ResourcesTest : GradlePluginTestBase() {
             }
 
             gradle(":createDistributableNativeDebugMingwX64").checks {
-                check.taskSuccessful(":copyDebugExecutableMingwX64ComposeResources")
+                check.taskSuccessful(":syncDebugExecutableMingwX64ComposeResources")
                 check.taskSuccessful(":linkDebugExecutableMingwX64")
                 check.taskSuccessful(":createDistributableNativeDebugMingwX64")
 
@@ -1170,6 +1175,13 @@ class ResourcesTest : GradlePluginTestBase() {
                     "$appDir/compose-resources/composeResources/" +
                         "mingwresources.generated.resources/files/device-🙂.txt"
                 ).checkExists()
+                assertEquals(
+                    "windows",
+                    file(
+                        "$appDir/compose-resources/composeResources/" +
+                            "mingwresources.generated.resources/files/platform-priority.txt"
+                    ).readText().trim(),
+                )
 
                 file(
                     "build/bin/mingwX64/debugExecutable/compose-resources/composeResources/" +
@@ -1187,6 +1199,31 @@ class ResourcesTest : GradlePluginTestBase() {
                 val processOutput = process.inputStream.bufferedReader().use { it.readText() }
                 assertEquals(0, process.exitValue(), processOutput)
                 assertTrue("WINDOWS_DEVICE_RESOURCES_OK" in processOutput, processOutput)
+            }
+
+            val sourceResource = file("src/commonMain/composeResources/files/sync-lifecycle.txt")
+            val stagedResource = file(
+                "build/bin/mingwX64/debugExecutable/compose-resources/composeResources/" +
+                    "mingwresources.generated.resources/files/sync-lifecycle.txt"
+            )
+            val syncTask = ":syncDebugExecutableMingwX64ComposeResources"
+
+            sourceResource.writeText("first")
+            gradle(syncTask).checks {
+                check.taskSuccessful(syncTask)
+                assertEquals("first", stagedResource.readText())
+            }
+
+            sourceResource.writeText("second")
+            gradle(syncTask).checks {
+                check.taskSuccessful(syncTask)
+                assertEquals("second", stagedResource.readText())
+            }
+
+            check(sourceResource.delete())
+            gradle(syncTask).checks {
+                check.taskSuccessful(syncTask)
+                stagedResource.checkNotExists()
             }
         }
     }

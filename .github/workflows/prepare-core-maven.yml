@@ -1,0 +1,226 @@
+name: Prepare validated core Maven repository
+
+on:
+  workflow_call:
+    inputs:
+      core_repository:
+        description: Exact owner/repository containing the core producer workflows
+        required: true
+        type: string
+      core_contract_ref:
+        description: Full commit SHA containing the core workflows, merger, and requirements
+        required: true
+        type: string
+      core_ref:
+        description: Full source commit SHA pinned by the core Maven requirements
+        required: true
+        type: string
+      core_windows_run_id:
+        description: Successful run containing the maven-windows artifact
+        required: true
+        type: string
+      core_apple_run_id:
+        description: Successful run containing the maven-apple artifact
+        required: true
+        type: string
+      core_web_run_id:
+        description: Successful run containing the maven-web-android artifact
+        required: true
+        type: string
+    secrets:
+      core_artifacts_token:
+        description: Read-only token with contents:read and actions:read on the core repository
+        required: true
+  workflow_dispatch:
+    inputs:
+      core_repository:
+        description: Exact owner/repository containing the core producer workflows
+        required: true
+        type: string
+        default: archivesteak/compose-multiplatform-core
+      core_contract_ref:
+        description: Full commit SHA containing the core workflows, merger, and requirements
+        required: true
+        type: string
+      core_ref:
+        description: Full source commit SHA pinned by the core Maven requirements
+        required: true
+        type: string
+      core_windows_run_id:
+        description: Successful run containing the maven-windows artifact
+        required: true
+        type: string
+      core_apple_run_id:
+        description: Successful run containing the maven-apple artifact
+        required: true
+        type: string
+      core_web_run_id:
+        description: Successful run containing the maven-web-android artifact
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out orchestration contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: orchestration
+          persist-credentials: false
+
+      - name: Require a read-only cross-repository token
+        shell: bash
+        env:
+          CORE_ARTIFACTS_TOKEN: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+        run: |
+          if [ -z "$CORE_ARTIFACTS_TOKEN" ]; then
+            echo "CORE_ARTIFACTS_TOKEN is required with read-only contents/actions access to the core repository."
+            exit 1
+          fi
+
+      - name: Check out the exact core contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.core_repository }}
+          ref: ${{ inputs.core_contract_ref }}
+          path: core-contract
+          persist-credentials: false
+          token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+
+      - name: Validate immutable inputs and checked-out revision
+        shell: bash
+        env:
+          CORE_REPOSITORY: ${{ inputs.core_repository }}
+          CORE_CONTRACT_REF: ${{ inputs.core_contract_ref }}
+          CORE_REF: ${{ inputs.core_ref }}
+          WINDOWS_RUN_ID: ${{ inputs.core_windows_run_id }}
+          APPLE_RUN_ID: ${{ inputs.core_apple_run_id }}
+          WEB_RUN_ID: ${{ inputs.core_web_run_id }}
+        run: |
+          orchestration_resolved=$(git -C orchestration rev-parse HEAD)
+          if [ "$orchestration_resolved" != "$GITHUB_SHA" ]; then
+            echo "orchestration checkout resolved to $orchestration_resolved, expected $GITHUB_SHA"
+            exit 1
+          fi
+          resolved=$(git -C core-contract rev-parse HEAD)
+          if [ "$resolved" != "$CORE_CONTRACT_REF" ]; then
+            echo "core contract checkout resolved to $resolved, expected $CORE_CONTRACT_REF"
+            exit 1
+          fi
+          test -z "$(git -C orchestration status --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C core-contract status --porcelain=v1 --untracked-files=all)"
+          python3 orchestration/.github/scripts/validate_core_artifact_inputs.py \
+            --core-repository "$CORE_REPOSITORY" \
+            --core-contract-ref "$CORE_CONTRACT_REF" \
+            --core-ref "$CORE_REF" \
+            --core-windows-run-id "$WINDOWS_RUN_ID" \
+            --core-apple-run-id "$APPLE_RUN_ID" \
+            --core-web-run-id "$WEB_RUN_ID" \
+            --core-requirements core-contract/scripts/maven-variant-requirements.json
+
+      - name: Self-test the exact merger and downstream validators
+        shell: bash
+        run: |
+          python3 -m unittest discover \
+            -s core-contract/scripts \
+            -p 'test_merge_maven_artifact.py'
+          python3 -m unittest discover \
+            -s orchestration/.github/scripts \
+            -p 'test_*.py'
+
+      - name: Validate producer run conclusions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+          CORE_REPOSITORY: ${{ inputs.core_repository }}
+          CORE_CONTRACT_REF: ${{ inputs.core_contract_ref }}
+          WINDOWS_RUN_ID: ${{ inputs.core_windows_run_id }}
+          APPLE_RUN_ID: ${{ inputs.core_apple_run_id }}
+          WEB_RUN_ID: ${{ inputs.core_web_run_id }}
+        run: |
+          for declaration in \
+            "windows|.github/workflows/publish-windows.yml|$WINDOWS_RUN_ID" \
+            "apple|.github/workflows/publish-apple.yml|$APPLE_RUN_ID" \
+            "web|.github/workflows/publish-web-android.yml|$WEB_RUN_ID"; do
+            IFS='|' read -r owner expected_path run_id <<<"$declaration"
+            payload=$(gh api "repos/$CORE_REPOSITORY/actions/runs/$run_id")
+            conclusion=$(jq -r .conclusion <<<"$payload")
+            repository=$(jq -r .head_repository.full_name <<<"$payload")
+            head_sha=$(jq -r .head_sha <<<"$payload")
+            event=$(jq -r .event <<<"$payload")
+            workflow_path_with_ref=$(jq -r .path <<<"$payload")
+            workflow_path=${workflow_path_with_ref%%@*}
+            if [ "$conclusion" != success ] || \
+               [ "$repository" != "$CORE_REPOSITORY" ] || \
+               [ "$head_sha" != "$CORE_CONTRACT_REF" ] || \
+               [ "$event" != workflow_dispatch ] || \
+               [ "$workflow_path" != "$expected_path" ]; then
+              echo "$owner run $run_id does not match the exact producer contract"
+              jq '{conclusion, event, head_sha, path, repository: .head_repository.full_name}' <<<"$payload"
+              exit 1
+            fi
+          done
+
+      - name: Download Windows core shard
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: maven-windows
+          path: core-shards/windows
+          repository: ${{ inputs.core_repository }}
+          run-id: ${{ inputs.core_windows_run_id }}
+          github-token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+
+      - name: Download Apple core shard
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: maven-apple
+          path: core-shards/apple
+          repository: ${{ inputs.core_repository }}
+          run-id: ${{ inputs.core_apple_run_id }}
+          github-token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+
+      - name: Download web and Android core shard
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: maven-web-android
+          path: core-shards/web
+          repository: ${{ inputs.core_repository }}
+          run-id: ${{ inputs.core_web_run_id }}
+          github-token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+
+      - name: Strictly union and validate core artifacts
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/validated-core"
+          python3 core-contract/scripts/merge-maven-artifact.py \
+            --windows core-shards/windows \
+            --apple core-shards/apple \
+            --web core-shards/web \
+            --destination "$RUNNER_TEMP/validated-core/repository" \
+            --requirements core-contract/scripts/maven-variant-requirements.json \
+            --dry-run \
+            --report "$RUNNER_TEMP/core-merge-dry-run-report.json"
+          python3 core-contract/scripts/merge-maven-artifact.py \
+            --windows core-shards/windows \
+            --apple core-shards/apple \
+            --web core-shards/web \
+            --destination "$RUNNER_TEMP/validated-core/repository" \
+            --requirements core-contract/scripts/maven-variant-requirements.json \
+            --report "$RUNNER_TEMP/validated-core/merge-report.json"
+          test -d "$RUNNER_TEMP/validated-core/repository/io/github/archivesteak"
+          test -s "$RUNNER_TEMP/validated-core/merge-report.json"
+
+      - name: Upload the validated core repository
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: validated-core-maven
+          path: ${{ runner.temp }}/validated-core
+          if-no-files-found: error
+          retention-days: 1

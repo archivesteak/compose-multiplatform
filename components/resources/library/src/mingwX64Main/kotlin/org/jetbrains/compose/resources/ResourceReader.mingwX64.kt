@@ -66,9 +66,10 @@ internal object DefaultMingwX64ResourceReader : ResourceReader {
         require(offset >= 0) { "offset must be non-negative" }
         require(size >= 0) { "size must be non-negative" }
         if (size > Int.MAX_VALUE) throw MissingResourceException(path, "Requested part is too long")
+        val pathOnDisk = getPathOnDisk(path)
         if (size == 0L) return ByteArray(0)
 
-        val file = openFile(getPathOnDisk(path)) ?: throw MissingResourceException(path)
+        val file = openFile(pathOnDisk) ?: throw MissingResourceException(path)
         try {
             if (_fseeki64(file, offset, SEEK_SET) != 0) {
                 throw MissingResourceException(path, "Unable to seek to offset $offset")
@@ -96,11 +97,7 @@ internal object DefaultMingwX64ResourceReader : ResourceReader {
         getPathOnDisk(path).toWindowsFileUri()
 
     private fun getPathOnDisk(path: String): String {
-        require(path.isNotEmpty()) { "Resource path must not be empty" }
-        require('\\' !in path && ':' !in path && '\u0000' !in path) { "Invalid resource path: $path" }
-        require(!path.startsWith('/') && path.split('/').none { it == "." || it == ".." }) {
-            "Resource path must be relative and must not contain traversal segments: $path"
-        }
+        validateWindowsResourcePath(path)
 
         val exeDir = exeDirectory() ?: throw MissingResourceException(path, "Executable path is unavailable")
         val installed = "$exeDir/$COMPOSE_RESOURCES_ROOT_DIR/$path"
@@ -115,7 +112,7 @@ internal object DefaultMingwX64ResourceReader : ResourceReader {
     }
 
     private fun openFile(path: String) = memScoped {
-        _wfopen(path.wcstr.ptr, "rb".wcstr.ptr)
+        _wfopen(path.toExtendedLengthWindowsPath().wcstr.ptr, "rb".wcstr.ptr)
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -127,10 +124,61 @@ internal object DefaultMingwX64ResourceReader : ResourceReader {
     }
 }
 
+private fun validateWindowsResourcePath(path: String) {
+    require(path.isNotEmpty()) { "Resource path must not be empty" }
+    require(!path.startsWith('/')) { "Resource path must be relative: $path" }
+    val segments = path.split('/')
+    require(segments.none { it.isEmpty() || it == "." || it == ".." }) {
+        "Resource path must not contain empty or traversal segments: $path"
+    }
+    segments.forEach { segment ->
+        require(segment.length <= MAX_WINDOWS_PATH_COMPONENT_LENGTH) {
+            "Resource path component is too long: $segment"
+        }
+        require(segment == segment.trimEnd(' ', '.')) {
+            "Resource path component must not end with a space or dot: $segment"
+        }
+        require(segment.none { it.code < 32 || it in WINDOWS_INVALID_PATH_CHARS }) {
+            "Resource path contains an invalid Windows file-name character: $path"
+        }
+        // Win32 normalizes trailing ASCII spaces and periods in the base name before checking the
+        // DOS device namespace. Apply the same rule as the Windows package-name validator so a
+        // component such as "CON .txt" cannot bypass the reserved-name check.
+        val deviceName = segment.substringBefore('.')
+            .trimEnd(' ', '.')
+            .uppercase()
+        require(deviceName !in WINDOWS_RESERVED_DEVICE_NAMES) {
+            "Resource path contains a reserved Windows device name: $segment"
+        }
+    }
+}
+
+private fun String.toExtendedLengthWindowsPath(): String {
+    val windowsPath = replace('/', '\\')
+    return when {
+        windowsPath.startsWith("\\\\?\\") -> windowsPath
+        windowsPath.startsWith("\\\\") -> "\\\\?\\UNC\\" + windowsPath.substring(2)
+        else -> "\\\\?\\$windowsPath"
+    }
+}
+
 private const val CHUNK_SIZE = 64 * 1024
 private const val WINDOWS_PATH_BUFFER_SIZE = 32 * 1024
 private const val COMPOSE_RESOURCES_ROOT_DIR = "compose-resources"
 private const val URI_HEX_DIGITS = "0123456789ABCDEF"
+private const val MAX_WINDOWS_PATH_COMPONENT_LENGTH = 255
+private const val WINDOWS_INVALID_PATH_CHARS = "<>:\"\\|?*"
+private val WINDOWS_RESERVED_DEVICE_NAMES = buildSet {
+    addAll(listOf("CON", "PRN", "AUX", "NUL", "CONIN\$", "CONOUT\$"))
+    (1..9).forEach { index ->
+        add("COM$index")
+        add("LPT$index")
+    }
+    listOf('¹', '²', '³').forEach { index ->
+        add("COM$index")
+        add("LPT$index")
+    }
+}
 
 internal fun String.toWindowsFileUri(): String {
     val normalized = replace('\\', '/')

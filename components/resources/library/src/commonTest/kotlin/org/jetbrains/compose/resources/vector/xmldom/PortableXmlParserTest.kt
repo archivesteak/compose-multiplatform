@@ -61,6 +61,7 @@ class PortableXmlParserTest {
     fun decodesSupplementaryNumericEntity() {
         assertEquals("🙂", parsePortableXml("<root>&#x1F642;</root>").textContent)
         assertEquals("🙂", parsePortableXml("<root>&#128578;</root>").textContent)
+        assertEquals("]]>", parsePortableXml("<root>]]&gt;</root>").textContent)
     }
 
     @Test
@@ -78,6 +79,19 @@ class PortableXmlParserTest {
     }
 
     @Test
+    fun normalizesXmlTextAndAggregatesDescendantText() {
+        val root = parsePortableXml(
+            "\uFEFF<?xml version='1.0'?><root value='a\tb\r\nc' encoded='a&#10;b'>" +
+                "<child>one\r\ntwo</child>three</root>"
+        )
+
+        assertEquals("a b c", root.getAttribute("value"))
+        assertEquals("a\nb", root.getAttribute("encoded"))
+        assertEquals("one\ntwothree", root.textContent)
+        assertEquals("one\ntwo", root.childNodes.item(0).textContent)
+    }
+
+    @Test
     fun rejectsMalformedDocuments() {
         assertFailsWith<MalformedXMLException> { parsePortableXml("<first/><second/>") }
         assertFailsWith<MalformedXMLException> { parsePortableXml("<root value='one' value='two'/>") }
@@ -91,6 +105,26 @@ class PortableXmlParserTest {
         assertFailsWith<MalformedXMLException> { parsePortableXml("<!DOCTYPE root><root/>") }
         assertFailsWith<MalformedXMLException> { parsePortableXml("<root>&unknown;</root>") }
         assertFailsWith<MalformedXMLException> { parsePortableXml("<root>&#0;</root>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root>&#x+20;</root>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root>&#X20;</root>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root value='raw < value'/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root value='one'value2='two'/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root>raw ]]> value</root>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root>\u0000</root>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root>\uD800</root>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root xmlns:xml='wrong'/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root xmlns:xmlns='urn:wrong'/>") }
+        assertFailsWith<MalformedXMLException> {
+            parsePortableXml("<root xmlns:a='http://www.w3.org/XML/1998/namespace'/>")
+        }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<root xmlns:a=''/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<!-- invalid -- comment --><root/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("\u00a0<root/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("&#32;<root/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<\u0080/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml(" \n<?xml version='1.0'?><root/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<?XML version='1.0'?><root/>") }
+        assertFailsWith<MalformedXMLException> { parsePortableXml("<?pi/data?><root/>") }
         assertFailsWith<MalformedXMLException> { parsePortableXml("<?xml version='1.0'<root/>") }
         assertFailsWith<MalformedXMLException> { parsePortableXml("<!-- unfinished <root/>") }
         assertFailsWith<MalformedXMLException> { parsePortableXml("<root><![CDATA[unfinished</root>") }

@@ -21,7 +21,7 @@ kotlin {
 }
 
 configureMavenPublication(
-    groupId = "org.jetbrains.compose.components",
+    groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-animatedimage",
-    name = "AnimatedImage for Compose JB"
+    name = "AnimatedImage for Compose Multiplatform"
 )

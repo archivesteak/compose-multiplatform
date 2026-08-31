@@ -1,11 +1,24 @@
 rootProject.name = "mingwNativeResources"
 
 pluginManagement {
+    val forkRepositoryPath = System.getProperty("maven.repo.local")
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: error("Pass -Dmaven.repo.local=<absolute isolated repository path>")
+    val forkRepository = java.io.File(forkRepositoryPath).canonicalFile
+    check(forkRepository.isAbsolute && forkRepository.isDirectory) {
+        "The isolated fork repository must be an existing absolute directory: $forkRepositoryPath"
+    }
+
     repositories {
-        mavenLocal {
-            content {
-                includeGroupByRegex("io\\.github\\.archivesteak\\.compose(\\..+)?")
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "isolatedForkRepository"
+                    url = uri(forkRepository)
+                }
             }
+            filter { includeGroupByRegex("io\\.github\\.archivesteak\\.compose(\\..*)?") }
         }
         gradlePluginPortal()
         mavenCentral()
@@ -18,11 +31,24 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
+    val forkRepositoryPath = System.getProperty("maven.repo.local")
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: error("Pass -Dmaven.repo.local=<absolute isolated repository path>")
+    val forkRepository = java.io.File(forkRepositoryPath).canonicalFile
+    check(forkRepository.isAbsolute && forkRepository.isDirectory) {
+        "The isolated fork repository must be an existing absolute directory: $forkRepositoryPath"
+    }
+
     repositories {
-        mavenLocal {
-            content {
-                includeGroupByRegex("io\\.github\\.archivesteak(\\..+)?")
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "isolatedForkRepository"
+                    url = uri(forkRepository)
+                }
             }
+            filter { includeGroupByRegex("io\\.github\\.archivesteak(\\..*)?") }
         }
         mavenCentral()
     }

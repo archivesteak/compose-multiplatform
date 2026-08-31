@@ -8,6 +8,7 @@
 package org.jetbrains.compose
 
 import groovy.lang.Closure
+import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.dsl.DependencyHandler
@@ -97,12 +98,12 @@ abstract class ComposePlugin : Plugin<Project> {
         @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"io.github.archivesteak.compose.ui:ui-tooling-preview:${ComposeBuildConfig.composeVersion}\""))
         val preview get() = composeDependency("org.jetbrains.compose.ui:ui-tooling-preview")
         @Deprecated(
-            "This artifact is pinned to version 1.7.3 and will not receive updates. " +
-                "Either use this version explicitly or migrate to Material Symbols (vector resources). " +
-                "See https://kotlinlang.org/docs/multiplatform/whats-new-compose-180.html",
-            replaceWith = ReplaceWith("\"org.jetbrains.compose.material:material-icons-extended:1.7.3\"")
+            "material-icons-extended was retired upstream and is not part of this fork. " +
+                "Use Material Symbols or checked-in vector resources.",
+            level = DeprecationLevel.ERROR,
         )
-        val materialIconsExtended get() = "org.jetbrains.compose.material:material-icons-extended:1.7.3"
+        val materialIconsExtended: String
+            get() = unsupportedForkDependency("org.jetbrains.compose.material:material-icons-extended")
         @Deprecated("Specify dependency directly")
         val components get() = CommonComponentsDependencies
         @Deprecated("Use compose.html", replaceWith = ReplaceWith("html"), level = DeprecationLevel.ERROR)
@@ -143,55 +144,43 @@ abstract class ComposePlugin : Plugin<Project> {
     object CommonComponentsDependencies {
         @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"io.github.archivesteak.compose.components:components-resources:${ComposeBuildConfig.composeVersion}\""))
         val resources = composeDependency("org.jetbrains.compose.components:components-resources")
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.components:components-ui-tooling-preview:${ComposeBuildConfig.composeUpstreamVersion}\""))
+        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"io.github.archivesteak.compose.components:components-ui-tooling-preview:${ComposeBuildConfig.composeVersion}\""))
         val uiToolingPreview = composeDependency("org.jetbrains.compose.components:components-ui-tooling-preview")
     }
 
     @Deprecated("Specify dependency directly")
     object DesktopComponentsDependencies {
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.components:components-splitpane:${ComposeBuildConfig.composeUpstreamVersion}\""))
+        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"io.github.archivesteak.compose.components:components-splitpane:${ComposeBuildConfig.composeVersion}\""))
         @ExperimentalComposeLibrary
         val splitPane = composeDependency("org.jetbrains.compose.components:components-splitpane")
 
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.components:components-animatedimage:${ComposeBuildConfig.composeUpstreamVersion}\""))
+        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"io.github.archivesteak.compose.components:components-animatedimage:${ComposeBuildConfig.composeVersion}\""))
         @ExperimentalComposeLibrary
         val animatedImage = composeDependency("org.jetbrains.compose.components:components-animatedimage")
     }
 
     @Deprecated("Use compose.html")
     object WebDependencies {
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.html:html-core:${ComposeBuildConfig.composeUpstreamVersion}\""))
-        val core by lazy {
-            composeDependency("org.jetbrains.compose.html:html-core")
-        }
+        @Deprecated("Compose HTML is not published by this fork", level = DeprecationLevel.ERROR)
+        val core: String get() = unsupportedForkDependency("org.jetbrains.compose.html:html-core")
 
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.html:html-svg:${ComposeBuildConfig.composeUpstreamVersion}\""))
-        val svg by lazy {
-            composeDependency("org.jetbrains.compose.html:html-svg")
-        }
+        @Deprecated("Compose HTML is not published by this fork", level = DeprecationLevel.ERROR)
+        val svg: String get() = unsupportedForkDependency("org.jetbrains.compose.html:html-svg")
 
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.html:html-test-utils:${ComposeBuildConfig.composeUpstreamVersion}\""))
-        val testUtils by lazy {
-            composeDependency("org.jetbrains.compose.html:html-test-utils")
-        }
+        @Deprecated("Compose HTML is not published by this fork", level = DeprecationLevel.ERROR)
+        val testUtils: String get() = unsupportedForkDependency("org.jetbrains.compose.html:html-test-utils")
     }
 
     @Deprecated("Specify dependency directly")
     object HtmlDependencies {
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.html:html-core:${ComposeBuildConfig.composeUpstreamVersion}\""))
-        val core by lazy {
-            composeDependency("org.jetbrains.compose.html:html-core")
-        }
+        @Deprecated("Compose HTML is not published by this fork", level = DeprecationLevel.ERROR)
+        val core: String get() = unsupportedForkDependency("org.jetbrains.compose.html:html-core")
 
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.html:html-svg:${ComposeBuildConfig.composeUpstreamVersion}\""))
-        val svg by lazy {
-            composeDependency("org.jetbrains.compose.html:html-svg")
-        }
+        @Deprecated("Compose HTML is not published by this fork", level = DeprecationLevel.ERROR)
+        val svg: String get() = unsupportedForkDependency("org.jetbrains.compose.html:html-svg")
 
-        @Deprecated("Specify dependency directly", replaceWith = ReplaceWith("\"org.jetbrains.compose.html:html-test-utils:${ComposeBuildConfig.composeUpstreamVersion}\""))
-        val testUtils by lazy {
-            composeDependency("org.jetbrains.compose.html:html-test-utils")
-        }
+        @Deprecated("Compose HTML is not published by this fork", level = DeprecationLevel.ERROR)
+        val testUtils: String get() = unsupportedForkDependency("org.jetbrains.compose.html:html-test-utils")
     }
 }
 
@@ -210,6 +199,11 @@ private fun composeDependency(groupWithArtifact: String): String {
 
 private fun composeMaterial3Dependency(groupWithArtifact: String) =
     "${remapComposeCoordinate(groupWithArtifact)}:$composeMaterial3Version"
+
+private fun unsupportedForkDependency(coordinate: String): Nothing = throw GradleException(
+    "$coordinate is not published by the Compose mingw fork. Mixing upstream Compose artifacts " +
+        "with io.github.archivesteak Compose artifacts is unsupported."
+)
 
 private fun setUpGroovyDslExtensions(project: Project) {
     project.plugins.withId("org.jetbrains.kotlin.multiplatform") {

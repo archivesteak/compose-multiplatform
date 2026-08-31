@@ -23,6 +23,9 @@ suspend fun main() {
     check(Res.readBytes("files/device-🙂.txt").decodeToString().trim() == "unicode-path-ok") {
         "The Unicode-path resource has unexpected content"
     }
+    check(Res.readBytes("files/platform-priority.txt").decodeToString().trim() == "windows") {
+        "The mingwX64 resource did not override the common resource"
+    }
 
     memScoped {
         val localeBuffer = allocArray<WCHARVar>(LOCALE_NAME_MAX_LENGTH)

@@ -4,7 +4,9 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class DefaultMingwX64ResourceReaderTest {
@@ -24,22 +26,66 @@ class DefaultMingwX64ResourceReaderTest {
     }
 
     @Test
-    fun rejectsAbsoluteAndTraversalPaths() {
+    fun rejectsAbsoluteAndTraversalPaths() = runTest {
         listOf(
             "",
             ".",
             "..",
             "../secret",
             "composeResources/../secret",
+            "composeResources//secret",
             "/absolute/resource",
             "C:/absolute/resource",
             "composeResources\\windows\\resource",
-            "composeResources/invalid\u0000resource"
+            "composeResources/invalid\u0000resource",
+            "composeResources/invalid*resource",
+            "composeResources/trailing. ",
+            "composeResources/NUL.txt",
+            "composeResources/NUL .bin",
+            "composeResources/CON .txt",
+            "composeResources/COM1 .log",
+            "composeResources/COM¹.log",
         ).forEach { path ->
             assertFailsWith<IllegalArgumentException>(path) {
                 DefaultMingwX64ResourceReader.getUri(path)
             }
         }
+
+        assertFailsWithSuspend<IllegalArgumentException> {
+            DefaultMingwX64ResourceReader.readPart("../secret", offset = 0, size = 0)
+        }
+    }
+
+    @Test
+    fun validatesPartialReadBoundsAndMissingFiles() = runTest {
+        assertFailsWithSuspend<IllegalArgumentException> {
+            DefaultMingwX64ResourceReader.readPart(RESOURCE_PATH, offset = -1, size = 1)
+        }
+        assertFailsWithSuspend<IllegalArgumentException> {
+            DefaultMingwX64ResourceReader.readPart(RESOURCE_PATH, offset = 0, size = -1)
+        }
+        assertFailsWithSuspend<MissingResourceException> {
+            DefaultMingwX64ResourceReader.readPart(RESOURCE_PATH, offset = 0, size = Int.MAX_VALUE.toLong() + 1)
+        }
+        assertFailsWithSuspend<MissingResourceException> {
+            DefaultMingwX64ResourceReader.readPart("composeResources/missing.txt", offset = 0, size = 0)
+        }
+        assertContentEquals(
+            ByteArray(0),
+            DefaultMingwX64ResourceReader.readPart(RESOURCE_PATH, offset = 1_000_000, size = 1),
+        )
+    }
+
+    private suspend inline fun <reified T : Throwable> assertFailsWithSuspend(
+        crossinline block: suspend () -> Unit,
+    ): T {
+        val failure = try {
+            block()
+            null
+        } catch (cause: Throwable) {
+            cause
+        }
+        return assertIs<T>(failure)
     }
 
     @Test
@@ -72,8 +118,15 @@ class DefaultMingwX64ResourceReaderTest {
         assertTrue(environment.theme in ThemeQualifier.entries)
     }
 
+    @Test
+    fun rejectsMalformedUtf8VectorXml() {
+        assertFails {
+            byteArrayOf(0xc3.toByte()).toXmlElement()
+        }
+    }
+
     private companion object {
         const val RESOURCE_PATH =
-            "composeResources/library.generated.resources/files/windows-reader-🙂.txt"
+            "composeResources/components.resources.library.generated.resources/files/windows-reader-🙂.txt"
     }
 }

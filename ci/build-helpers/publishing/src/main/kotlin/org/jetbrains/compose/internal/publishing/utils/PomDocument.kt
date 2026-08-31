@@ -81,7 +81,11 @@ internal class PomDocument(file: File) {
         val nameText = originalNodes["name"]?.textContent
             ?: originalNodes["artifactId"]!!.textContent
                 .split("-")
-                .joinToString(" ") { it.capitalize() }
+                .joinToString(" ") { word ->
+                    word.replaceFirstChar { first ->
+                        if (first.isLowerCase()) first.titlecase() else first.toString()
+                    }
+                }
         val name = newNode("name", nameText)
         val description = newNode("description", (originalNodes["description"] ?: name).textContent)
         val url = newNode("url", projectUrl)

@@ -23,7 +23,7 @@ kotlin {
 }
 
 configureMavenPublication(
-    groupId = "org.jetbrains.compose.components",
+    groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-splitpane",
-    name = "SplitPane for Compose JB"
+    name = "SplitPane for Compose Multiplatform"
 )

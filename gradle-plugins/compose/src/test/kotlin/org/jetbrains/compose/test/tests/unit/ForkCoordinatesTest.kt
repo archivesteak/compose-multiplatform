@@ -12,6 +12,7 @@ import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.io.TempDir
 import org.jetbrains.compose.ComposeBuildConfig
 import org.jetbrains.compose.ComposePlugin
+import org.jetbrains.compose.unsupportedUpstreamComposeCoordinates
 import org.jetbrains.compose.internal.remapComposeCoordinate
 import org.jetbrains.compose.internal.utils.currentTarget
 import org.jetbrains.compose.test.utils.TestEnvironment
@@ -24,9 +25,7 @@ import org.jetbrains.compose.web.internal.skikoRuntimeModuleForComposeUiGroup
 import java.io.File
 import java.util.Properties
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 
 class ForkCoordinatesTest {
@@ -60,6 +59,35 @@ class ForkCoordinatesTest {
     }
 
     @Test
+    fun rejectsEveryUpstreamComposeLineageButAllowsIndependentJetBrainsArtifacts() {
+        assertEquals(
+            listOf(
+                "org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.1",
+                "org.jetbrains.compose.components:components-resources:1.9.3",
+                "org.jetbrains.compose.foundation:foundation:1.9.3",
+                "org.jetbrains.compose.html:html-core:1.9.3",
+                "org.jetbrains.compose.material:material-icons-core:1.7.3",
+                "org.jetbrains.skiko:skiko:0.9.0",
+            ),
+            unsupportedUpstreamComposeCoordinates(
+                listOf(
+                    "io.github.archivesteak.compose.runtime:runtime:1.12.0-mingw",
+                    "io.github.archivesteak.skiko:skiko:0.151.0-mingw",
+                    "org.jetbrains.compose.annotation-internal:annotation:1.10.0",
+                    "org.jetbrains.compose.collection-internal:collection:1.10.0",
+                    "org.jetbrains.compose.hot-reload:hot-reload-gradle-plugin:1.2.0",
+                    "org.jetbrains.compose.foundation:foundation:1.9.3",
+                    "org.jetbrains.compose.material:material-icons-core:1.7.3",
+                    "org.jetbrains.compose.components:components-resources:1.9.3",
+                    "org.jetbrains.compose.html:html-core:1.9.3",
+                    "org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.1",
+                    "org.jetbrains.skiko:skiko:0.9.0",
+                )
+            )
+        )
+    }
+
+    @Test
     fun desktopCurrentOsUsesPublishedForkCoordinateAndVersion() {
         assertEquals(
             "io.github.archivesteak.compose.desktop:desktop-jvm-${currentTarget.id}:" +
@@ -70,7 +98,7 @@ class ForkCoordinatesTest {
 
     @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
     @Test
-    fun keepsArtifactsThatTheForkDoesNotPublishUpstream() {
+    fun remapsEveryPublishedForkComponentAndLeavesRetiredArtifactsExplicit() {
         assertEquals(
             "org.jetbrains.compose.material:material-icons-core",
             remapComposeCoordinate("org.jetbrains.compose.material:material-icons-core")
@@ -80,7 +108,7 @@ class ForkCoordinatesTest {
             remapComposeCoordinate("org.jetbrains.compose.material:material-icons-extended")
         )
         assertEquals(
-            "org.jetbrains.compose.components:components-splitpane",
+            "io.github.archivesteak.compose.components:components-splitpane",
             remapComposeCoordinate("org.jetbrains.compose.components:components-splitpane")
         )
         assertEquals(
@@ -88,17 +116,19 @@ class ForkCoordinatesTest {
             remapComposeCoordinate("org.jetbrains.compose.html:html-core")
         )
         assertEquals(
-            "org.jetbrains.compose.components:components-splitpane:${ComposeBuildConfig.composeUpstreamVersion}",
+            "io.github.archivesteak.compose.components:components-splitpane:" +
+                ComposeBuildConfig.composeVersion,
             ComposePlugin.DesktopComponentsDependencies.splitPane
         )
         assertEquals(
-            "org.jetbrains.compose.components:components-ui-tooling-preview:" +
-                ComposeBuildConfig.composeUpstreamVersion,
-            ComposePlugin.CommonComponentsDependencies.uiToolingPreview
+            "io.github.archivesteak.compose.components:components-animatedimage:" +
+                ComposeBuildConfig.composeVersion,
+            ComposePlugin.DesktopComponentsDependencies.animatedImage
         )
         assertEquals(
-            "org.jetbrains.compose.html:html-core:${ComposeBuildConfig.composeUpstreamVersion}",
-            ComposePlugin.HtmlDependencies.core
+            "io.github.archivesteak.compose.components:components-ui-tooling-preview:" +
+                ComposeBuildConfig.composeVersion,
+            ComposePlugin.CommonComponentsDependencies.uiToolingPreview
         )
     }
 
@@ -163,7 +193,7 @@ class ForkCoordinatesTest {
     }
 
     @Test
-    fun testHarnessRedirectsOnlyTheForkVersionOfTheLegacyPluginId() {
+    fun testFixturesUseThePublishedForkPluginIdDirectly() {
         TestProject(
             name = "application/defaultArgs",
             testEnvironment = TestEnvironment(
@@ -178,21 +208,10 @@ class ForkCoordinatesTest {
         )
 
         val fixtureSettings = temporaryDir.resolve("settings.gradle").readText()
-        assertContains(fixtureSettings, "id 'org.jetbrains.compose'")
-        assertFalse(fixtureSettings.contains("io.github.archivesteak.compose"))
-
-        val initScript = temporaryDir
-            .resolve(".compose-fork-plugin-resolution.init.gradle")
-            .readText()
-        assertContains(initScript, "requested.id.id == 'org.jetbrains.compose'")
-        assertContains(
-            initScript,
-            "requested.version == '${ComposeBuildConfig.composeGradlePluginVersion}'"
+        assertEquals(
+            true,
+            fixtureSettings.contains("id 'io.github.archivesteak.compose'"),
         )
-        assertContains(
-            initScript,
-            "useModule('io.github.archivesteak.compose:compose-gradle-plugin:" +
-                "${ComposeBuildConfig.composeGradlePluginVersion}')"
-        )
+        assertEquals(false, temporaryDir.resolve(".compose-fork-plugin-resolution.init.gradle").exists())
     }
 }

@@ -4,7 +4,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.compose")
+    id("io.github.archivesteak.compose")
 }
 
 dependencies {

@@ -1,5 +1,5 @@
 plugins {
-    id("org.jetbrains.compose")
+    id("io.github.archivesteak.compose")
     kotlin("multiplatform")
     kotlin("plugin.compose")
     id("com.android.kotlin.multiplatform.library")
@@ -17,9 +17,9 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            api("org.jetbrains.compose.runtime:runtime:COMPOSE_VERSION_PLACEHOLDER")
-            api("org.jetbrains.compose.material:material:COMPOSE_VERSION_PLACEHOLDER")
-            api("org.jetbrains.compose.components:components-resources:COMPOSE_VERSION_PLACEHOLDER")
+            api("io.github.archivesteak.compose.runtime:runtime:COMPOSE_VERSION_PLACEHOLDER")
+            api("io.github.archivesteak.compose.material:material:COMPOSE_VERSION_PLACEHOLDER")
+            api("io.github.archivesteak.compose.components:components-resources:COMPOSE_VERSION_PLACEHOLDER")
         }
     }
 }

@@ -1,3 +1,4 @@
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -26,4 +27,16 @@ subprojects {
         }
     }
 
+    plugins.withId("maven-publish") {
+        tasks.withType<PublishToMavenRepository>().configureEach {
+            // Gradle assigns the repository after task creation. Defer inspection until the task
+            // is about to execute so harmless realization (`tasks --all`, IDE import) remains safe.
+            doFirst {
+                check(repository.url.scheme.equals("file", ignoreCase = true)) {
+                    "Remote publication is disabled while the fork publication freeze is active: " +
+                        repository.url
+                }
+            }
+        }
+    }
 }

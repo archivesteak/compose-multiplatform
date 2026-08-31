@@ -8,6 +8,7 @@ package org.jetbrains.compose.test.tests.integration
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.gradle.util.GradleVersion
+import org.jetbrains.compose.ComposeBuildConfig
 import org.jetbrains.compose.desktop.ui.tooling.preview.rpc.PreviewLogger
 import org.jetbrains.compose.desktop.ui.tooling.preview.rpc.RemoteConnection
 import org.jetbrains.compose.desktop.ui.tooling.preview.rpc.receiveConfigFromGradle
@@ -28,6 +29,59 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertFalse
 
 class GradlePluginTest : GradlePluginTestBase() {
+    @Test
+    fun resolvesPublishedForkPluginWithoutResolutionShim() = with(
+        testProject("misc/forkPluginResolution")
+    ) {
+        // The second invocation verifies that the fixture and published plugin are also valid when
+        // Gradle restores the project model from its configuration cache.
+        repeat(2) {
+            gradle("verifyForkPluginResolution").checks {
+                check.taskSuccessful(":verifyForkPluginResolution")
+                check.logContains("FORK_PLUGIN_RESOLUTION_OK")
+            }
+        }
+    }
+
+    @Test
+    fun forkLineageGuardAcceptsForkAndRejectsUpstreamCompose() = with(
+        testProject("misc/forkPluginResolution")
+    ) {
+        gradle("compileKotlin").checks {
+            check.taskSuccessful(":checkMainComposeForkLineage")
+            check.taskSuccessful(":compileKotlin")
+        }
+
+        gradleFailure(
+            "compileKotlin",
+            "-PuseUpstreamCompose=true",
+            "-Porg.jetbrains.compose.library.compatibility.check.disable=true",
+        ).checks {
+            check.taskFailed(":checkMainComposeForkLineage")
+            check.logContains(
+                "The Compose mingw fork dependency graph contains upstream Compose artifacts."
+            )
+            check.logContains(
+                "org.jetbrains.compose.runtime:runtime-desktop:" +
+                    ComposeBuildConfig.composeUpstreamVersion
+            )
+            check.logContains("Mixed fork/upstream graphs are not binary-safe.")
+        }
+
+        gradleFailure(
+            "compileKotlin",
+            "-PuseUpstreamCompose=true",
+            "-PupstreamComposeScope=runtimeOnly",
+            "-Porg.jetbrains.compose.library.compatibility.check.disable=true",
+        ).checks {
+            check.taskFailed(":checkMainComposeForkLineage")
+            check.logContains(
+                "org.jetbrains.compose.runtime:runtime-desktop:" +
+                    ComposeBuildConfig.composeUpstreamVersion
+            )
+        }
+    }
+
     @Test
     fun skikoWasm() = with(
         testProject(

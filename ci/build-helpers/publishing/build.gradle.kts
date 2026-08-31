@@ -38,14 +38,25 @@ val shadowJar by tasks.registering(ShadowJar::class) {
     val fromPackage = "de.undercouch"
     val toPackage = "org.jetbrains.compose.internal.publishing.$fromPackage"
     relocate(fromPackage, toPackage)
-    archiveClassifier.set("shadow")
+    archiveBaseName.set("shadow")
+    archiveClassifier.set("")
+    archiveVersion.set("")
     configurations = listOf(embeddedDependencies)
     from(sourceSets["main"]!!.output)
     exclude("META-INF/gradle-plugins/de.undercouch.download.properties")
 }
 
-val jar = tasks.named<Jar>("jar") {
+// ShadowJar already contains this project's classes and resources. Re-zipping it through the
+// regular JAR duplicates every project entry and can publish both relocated and original bytecode.
+tasks.named<Jar>("jar") {
+    enabled = false
+}
+listOf("apiElements", "runtimeElements").forEach { configurationName ->
+    configurations.named(configurationName) {
+        outgoing.artifacts.clear()
+        outgoing.artifact(shadowJar)
+    }
+}
+tasks.named("assemble") {
     dependsOn(shadowJar)
-    from(zipTree(shadowJar.get().archiveFile))
-    this.duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }

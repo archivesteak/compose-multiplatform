@@ -36,9 +36,12 @@ abstract class CheckJarPackagesTask @Inject constructor(
 
     private fun checkJarContainsExpectedPackages(jar: ZipFile) {
         val unexpectedClasses = arrayListOf<String>()
+        val duplicateEntries = sortedSetOf<String>()
+        val seenEntries = hashSetOf<String>()
         val allowedPrefixes = allowedPackagePrefixes.get().map { it.replace(".", "/") }
 
         for (entry in jar.entries()) {
+            if (!seenEntries.add(entry.name)) duplicateEntries.add(entry.name)
             if (entry.isDirectory || !entry.name.endsWith(".class")) continue
 
             if (allowedPrefixes.none { prefix -> entry.name.startsWith(prefix) }) {
@@ -46,17 +49,23 @@ abstract class CheckJarPackagesTask @Inject constructor(
             }
         }
 
-        if (unexpectedClasses.any()) {
+        if (unexpectedClasses.any() || duplicateEntries.any()) {
             error(buildString {
-                appendLine("All classes in ${jar.name} must match allowed prefixes:")
-                allowedPrefixes.forEach {
-                    appendLine("  * $it")
+                if (duplicateEntries.any()) {
+                    appendLine("${jar.name} contains duplicate ZIP entries:")
+                    duplicateEntries.forEach { appendLine("  * $it") }
                 }
-                appendLine("Non-valid classes:")
-                val unexpectedGroups = unexpectedClasses
-                    .groupByTo(TreeMap()) { it.substringBeforeLast("/") }
-                for ((_, classes) in unexpectedGroups) {
-                    appendLine("  * ${classes.first()}")
+                if (unexpectedClasses.any()) {
+                    appendLine("All classes in ${jar.name} must match allowed prefixes:")
+                    allowedPrefixes.forEach {
+                        appendLine("  * $it")
+                    }
+                    appendLine("Non-valid classes:")
+                    val unexpectedGroups = unexpectedClasses
+                        .groupByTo(TreeMap()) { it.substringBeforeLast("/") }
+                    for ((_, classes) in unexpectedGroups) {
+                        appendLine("  * ${classes.first()}")
+                    }
                 }
             })
         }

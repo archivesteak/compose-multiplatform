@@ -1,0 +1,485 @@
+name: Build and union Compose resources
+
+on:
+  workflow_call:
+    inputs:
+      contract_ref:
+        description: Exact compose-multiplatform commit containing this workflow and requirements
+        required: true
+        type: string
+      source_ref:
+        description: Exact compose-multiplatform source commit to build
+        required: true
+        type: string
+      core_repository:
+        description: Exact owner/repository containing the core producer workflows
+        required: true
+        type: string
+      core_contract_ref:
+        description: Full commit SHA containing the core workflows, merger, and requirements
+        required: true
+        type: string
+      core_ref:
+        description: Full source commit SHA pinned by the core Maven requirements
+        required: true
+        type: string
+      core_windows_run_id:
+        description: Successful run containing the maven-windows artifact
+        required: true
+        type: string
+      core_apple_run_id:
+        description: Successful run containing the maven-apple artifact
+        required: true
+        type: string
+      core_web_run_id:
+        description: Successful run containing the maven-web-android artifact
+        required: true
+        type: string
+    secrets:
+      core_artifacts_token:
+        description: Read-only token with contents:read and actions:read on the core repository
+        required: true
+  workflow_dispatch:
+    inputs:
+      contract_ref:
+        description: Exact compose-multiplatform commit containing this workflow and requirements
+        required: true
+        type: string
+      source_ref:
+        description: Exact compose-multiplatform source commit to build
+        required: true
+        type: string
+      core_repository:
+        description: Exact owner/repository containing the core producer workflows
+        required: true
+        type: string
+        default: archivesteak/compose-multiplatform-core
+      core_contract_ref:
+        description: Full commit SHA containing the core workflows, merger, and requirements
+        required: true
+        type: string
+      core_ref:
+        description: Full source commit SHA pinned by the core Maven requirements
+        required: true
+        type: string
+      core_windows_run_id:
+        description: Successful run containing the maven-windows artifact
+        required: true
+        type: string
+      core_apple_run_id:
+        description: Successful run containing the maven-apple artifact
+        required: true
+        type: string
+      core_web_run_id:
+        description: Successful run containing the maven-web-android artifact
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  prepare-core:
+    uses: ./.github/workflows/prepare-core-maven.yml
+    with:
+      core_repository: ${{ inputs.core_repository }}
+      core_contract_ref: ${{ inputs.core_contract_ref }}
+      core_ref: ${{ inputs.core_ref }}
+      core_windows_run_id: ${{ inputs.core_windows_run_id }}
+      core_apple_run_id: ${{ inputs.core_apple_run_id }}
+      core_web_run_id: ${{ inputs.core_web_run_id }}
+    secrets:
+      core_artifacts_token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+
+  publish-host-shards:
+    needs: prepare-core
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - owner: windows
+            os: windows-2022
+            python: python
+            tasks: >-
+              :resources:library:mingwX64Test
+              :resources:library:publishDesktopPublicationToMavenLocal
+              :resources:library:publishMingwX64PublicationToMavenLocal
+              :resources:library:publishKotlinMultiplatformPublicationToMavenLocal
+            verify_targets: >-
+              --target desktop=.jar
+              --target mingwX64=.klib
+            forbid_targets: ""
+          - owner: apple
+            os: macos-14
+            python: python3
+            tasks: >-
+              :resources:library:linkDebugTestIosSimulatorArm64
+              :resources:library:publishMacosArm64PublicationToMavenLocal
+              :resources:library:publishIosArm64PublicationToMavenLocal
+              :resources:library:publishIosSimulatorArm64PublicationToMavenLocal
+              :resources:library:publishKotlinMultiplatformPublicationToMavenLocal
+            verify_targets: >-
+              --target macosArm64=.klib
+              --target iosArm64=.klib
+              --target iosSimulatorArm64=.klib
+            forbid_targets: --forbid-root-variant-prefix mingwX64
+          - owner: web
+            os: ubuntu-24.04
+            python: python3
+            tasks: >-
+              :resources:library:jsBrowserTest
+              :resources:library:wasmJsBrowserTest
+              :resources:library:publishAndroidReleasePublicationToMavenLocal
+              :resources:library:publishJsPublicationToMavenLocal
+              :resources:library:publishWasmJsPublicationToMavenLocal
+              :resources:library:publishKotlinMultiplatformPublicationToMavenLocal
+            verify_targets: >-
+              --target release=.aar
+              --target js=.klib
+              --target wasmJs=.klib
+            forbid_targets: --forbid-root-variant-prefix mingwX64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - name: Check out orchestration contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.contract_ref }}
+          path: orchestration
+          persist-credentials: false
+
+      - name: Check out exact resources source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref }}
+          path: compose-multiplatform
+          persist-credentials: false
+
+      - name: Check out exact core contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.core_repository }}
+          ref: ${{ inputs.core_contract_ref }}
+          path: core-contract
+          persist-credentials: false
+          token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+
+      - name: Download validated core repository
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: validated-core-maven
+          path: ${{ runner.temp }}/validated-core
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Validate source and provenance contract
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          CONTRACT_REF: ${{ inputs.contract_ref }}
+          CORE_REPOSITORY: ${{ inputs.core_repository }}
+          CORE_CONTRACT_REF: ${{ inputs.core_contract_ref }}
+          CORE_REF: ${{ inputs.core_ref }}
+          WINDOWS_RUN_ID: ${{ inputs.core_windows_run_id }}
+          APPLE_RUN_ID: ${{ inputs.core_apple_run_id }}
+          WEB_RUN_ID: ${{ inputs.core_web_run_id }}
+          PYTHON: ${{ matrix.python }}
+        run: |
+          if [ "$GITHUB_SHA" != "$CONTRACT_REF" ]; then
+            echo "running workflow commit is $GITHUB_SHA, expected contract_ref=$CONTRACT_REF"
+            exit 1
+          fi
+          resolved=$(git -C compose-multiplatform rev-parse HEAD)
+          if [ "$resolved" != "$SOURCE_REF" ]; then
+            echo "resources checkout resolved to $resolved, expected $SOURCE_REF"
+            exit 1
+          fi
+          contract_resolved=$(git -C orchestration rev-parse HEAD)
+          if [ "$contract_resolved" != "$CONTRACT_REF" ]; then
+            echo "resources contract checkout resolved to $contract_resolved, expected $CONTRACT_REF"
+            exit 1
+          fi
+          core_contract_resolved=$(git -C core-contract rev-parse HEAD)
+          if [ "$core_contract_resolved" != "$CORE_CONTRACT_REF" ]; then
+            echo "core contract checkout resolved to $core_contract_resolved, expected $CORE_CONTRACT_REF"
+            exit 1
+          fi
+          test -z "$(git -C compose-multiplatform status --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C core-contract status --porcelain=v1 --untracked-files=all)"
+          "$PYTHON" orchestration/.github/scripts/validate_core_artifact_inputs.py \
+            --core-repository "$CORE_REPOSITORY" \
+            --core-contract-ref "$CORE_CONTRACT_REF" \
+            --core-ref "$CORE_REF" \
+            --core-windows-run-id "$WINDOWS_RUN_ID" \
+            --core-apple-run-id "$APPLE_RUN_ID" \
+            --core-web-run-id "$WEB_RUN_ID" \
+            --core-requirements core-contract/scripts/maven-variant-requirements.json \
+            --resources-ref "$SOURCE_REF" \
+            --resources-requirements orchestration/.github/resources-maven-variant-requirements.json
+
+      - name: Point Android builds at the runner SDK
+        shell: bash
+        run: |
+          sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
+          if [ -z "$sdk" ]; then
+            echo "The runner provides no Android SDK path."
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "${sdk//\\//}" > compose-multiplatform/components/local.properties
+
+      - name: Publish the exact fork plugin into the isolated repository
+        shell: bash
+        working-directory: compose-multiplatform/gradle-plugins
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            ./gradlew.bat "-Dmaven.repo.local=$RUNNER_TEMP/validated-core/repository" \
+              --no-daemon --stacktrace :compose:publishToMavenLocal
+          else
+            ./gradlew "-Dmaven.repo.local=$RUNNER_TEMP/validated-core/repository" \
+              --no-daemon --stacktrace :compose:publishToMavenLocal
+          fi
+
+      - name: Test and publish the host-owned resources targets
+        shell: bash
+        working-directory: compose-multiplatform/components
+        env:
+          RESOURCE_TASKS: ${{ matrix.tasks }}
+        run: |
+          read -r -a tasks <<<"$RESOURCE_TASKS"
+          if [ "$RUNNER_OS" = Windows ]; then
+            ./gradlew.bat "-Dmaven.repo.local=$RUNNER_TEMP/validated-core/repository" \
+              --no-daemon --stacktrace "${tasks[@]}"
+          else
+            ./gradlew "-Dmaven.repo.local=$RUNNER_TEMP/validated-core/repository" \
+              --no-daemon --stacktrace "${tasks[@]}"
+          fi
+
+      - name: Collect and verify the exact host shard
+        shell: bash
+        env:
+          OWNER: ${{ matrix.owner }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          VERIFY_TARGETS: ${{ matrix.verify_targets }}
+          FORBID_TARGETS: ${{ matrix.forbid_targets }}
+          PYTHON: ${{ matrix.python }}
+        run: |
+          resolved=$(git -C compose-multiplatform rev-parse HEAD)
+          if [ "$resolved" != "$SOURCE_REF" ] || \
+             [ -n "$(git -C compose-multiplatform status --porcelain=v1 --untracked-files=all)" ]; then
+            echo "resources source changed during the producer build"
+            exit 1
+          fi
+          core_compose=$(jq -r '.sourceProvenance.windows.compose' core-contract/scripts/maven-variant-requirements.json)
+          core_skia=$(jq -r '.sourceProvenance.windows.skia' core-contract/scripts/maven-variant-requirements.json)
+          core_skiko=$(jq -r '.sourceProvenance.windows.skiko' core-contract/scripts/maven-variant-requirements.json)
+          "$PYTHON" orchestration/.github/scripts/prepare_resources_shard.py \
+            --owner "$OWNER" \
+            --source-repository "$RUNNER_TEMP/validated-core/repository" \
+            --destination staging/repository \
+            --requirements orchestration/.github/resources-maven-variant-requirements.json \
+            --resources-ref "$SOURCE_REF" \
+            --core-compose-ref "$core_compose" \
+            --core-skia-ref "$core_skia" \
+            --core-skiko-ref "$core_skiko"
+          "$PYTHON" core-contract/.github/scripts/prune-missing-kmp-redirects.py staging/repository
+          read -r -a targets <<<"$VERIFY_TARGETS"
+          read -r -a forbidden <<<"$FORBID_TARGETS"
+          "$PYTHON" core-contract/.github/scripts/verify-maven-kmp-publications.py \
+            staging/repository \
+            --coordinate io.github.archivesteak.compose.components:components-resources:1.12.0-beta02-mingw \
+            "${targets[@]}" "${forbidden[@]}"
+          "$PYTHON" core-contract/.github/scripts/verify-maven-dependency-closure.py \
+            staging/repository \
+            --coordinate io.github.archivesteak.compose.components:components-resources:1.12.0-beta02-mingw \
+            --forbid-dependency-group-prefix org.jetbrains.compose \
+            --forbid-dependency-group-prefix org.jetbrains.skiko
+
+      - name: Upload resources host shard
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maven-resources-${{ matrix.owner }}
+          path: staging/repository
+          if-no-files-found: error
+          retention-days: 2
+
+  union-resources:
+    needs:
+      - prepare-core
+      - publish-host-shards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out orchestration contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.contract_ref }}
+          path: orchestration
+          persist-credentials: false
+
+      - name: Check out exact plugin source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref }}
+          path: compose-multiplatform
+          persist-credentials: false
+
+      - name: Check out exact core contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.core_repository }}
+          ref: ${{ inputs.core_contract_ref }}
+          path: core-contract
+          persist-credentials: false
+          token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
+
+      - name: Download validated core repository
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: validated-core-maven
+          path: validated-core
+
+      - name: Download Windows resources shard
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: maven-resources-windows
+          path: resources-shards/windows
+
+      - name: Download Apple resources shard
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: maven-resources-apple
+          path: resources-shards/apple
+
+      - name: Download web resources shard
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: maven-resources-web
+          path: resources-shards/web
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Strictly union resources into the validated core repository
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          CONTRACT_REF: ${{ inputs.contract_ref }}
+          CORE_REPOSITORY: ${{ inputs.core_repository }}
+          CORE_CONTRACT_REF: ${{ inputs.core_contract_ref }}
+          CORE_REF: ${{ inputs.core_ref }}
+          WINDOWS_RUN_ID: ${{ inputs.core_windows_run_id }}
+          APPLE_RUN_ID: ${{ inputs.core_apple_run_id }}
+          WEB_RUN_ID: ${{ inputs.core_web_run_id }}
+        run: |
+          if [ "$GITHUB_SHA" != "$CONTRACT_REF" ]; then
+            echo "running workflow commit is $GITHUB_SHA, expected contract_ref=$CONTRACT_REF"
+            exit 1
+          fi
+          source_resolved=$(git -C compose-multiplatform rev-parse HEAD)
+          if [ "$source_resolved" != "$SOURCE_REF" ]; then
+            echo "plugin checkout resolved to $source_resolved, expected $SOURCE_REF"
+            exit 1
+          fi
+          contract_resolved=$(git -C orchestration rev-parse HEAD)
+          if [ "$contract_resolved" != "$CONTRACT_REF" ]; then
+            echo "resources contract checkout resolved to $contract_resolved, expected $CONTRACT_REF"
+            exit 1
+          fi
+          core_contract_resolved=$(git -C core-contract rev-parse HEAD)
+          if [ "$core_contract_resolved" != "$CORE_CONTRACT_REF" ]; then
+            echo "core contract checkout resolved to $core_contract_resolved, expected $CORE_CONTRACT_REF"
+            exit 1
+          fi
+          test -z "$(git -C compose-multiplatform status --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C orchestration status --porcelain=v1 --untracked-files=all)"
+          test -z "$(git -C core-contract status --porcelain=v1 --untracked-files=all)"
+          python3 orchestration/.github/scripts/validate_core_artifact_inputs.py \
+            --core-repository "$CORE_REPOSITORY" \
+            --core-contract-ref "$CORE_CONTRACT_REF" \
+            --core-ref "$CORE_REF" \
+            --core-windows-run-id "$WINDOWS_RUN_ID" \
+            --core-apple-run-id "$APPLE_RUN_ID" \
+            --core-web-run-id "$WEB_RUN_ID" \
+            --core-requirements core-contract/scripts/maven-variant-requirements.json \
+            --resources-ref "$SOURCE_REF" \
+            --resources-requirements orchestration/.github/resources-maven-variant-requirements.json
+          mkdir -p "$RUNNER_TEMP/validated-resources"
+          cp -a validated-core/repository "$RUNNER_TEMP/validated-resources/repository"
+          cp validated-core/merge-report.json "$RUNNER_TEMP/validated-resources/core-merge-report.json"
+          python3 core-contract/scripts/merge-maven-artifact.py \
+            --windows resources-shards/windows \
+            --apple resources-shards/apple \
+            --web resources-shards/web \
+            --destination "$RUNNER_TEMP/validated-resources/repository" \
+            --requirements orchestration/.github/resources-maven-variant-requirements.json \
+            --dry-run \
+            --report "$RUNNER_TEMP/resources-merge-dry-run-report.json"
+          python3 core-contract/scripts/merge-maven-artifact.py \
+            --windows resources-shards/windows \
+            --apple resources-shards/apple \
+            --web resources-shards/web \
+            --destination "$RUNNER_TEMP/validated-resources/repository" \
+            --requirements orchestration/.github/resources-maven-variant-requirements.json \
+            --report "$RUNNER_TEMP/validated-resources/resources-merge-report.json"
+          python3 core-contract/.github/scripts/verify-maven-kmp-publications.py \
+            "$RUNNER_TEMP/validated-resources/repository" \
+            --coordinate io.github.archivesteak.compose.components:components-resources:1.12.0-beta02-mingw \
+            --target desktop=.jar \
+            --target mingwX64=.klib \
+            --target macosArm64=.klib \
+            --target iosArm64=.klib \
+            --target iosSimulatorArm64=.klib \
+            --target release=.aar \
+            --target js=.klib \
+            --target wasmJs=.klib
+          python3 core-contract/.github/scripts/verify-maven-dependency-closure.py \
+            "$RUNNER_TEMP/validated-resources/repository" \
+            --coordinate io.github.archivesteak.compose.components:components-resources:1.12.0-beta02-mingw \
+            --forbid-dependency-group-prefix org.jetbrains.compose \
+            --forbid-dependency-group-prefix org.jetbrains.skiko
+
+      - name: Publish and verify the exact fork Gradle plugin
+        shell: bash
+        working-directory: compose-multiplatform/gradle-plugins
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          ./gradlew "-Dmaven.repo.local=$RUNNER_TEMP/validated-resources/repository" \
+            --no-daemon --stacktrace \
+            :compose:publishToMavenLocal :compose:checkJar
+          resolved=$(git rev-parse HEAD)
+          if [ "$resolved" != "$SOURCE_REF" ] || \
+             [ -n "$(git status --porcelain=v1 --untracked-files=all)" ]; then
+            echo "plugin source changed during publication"
+            exit 1
+          fi
+          python3 ../../orchestration/.github/scripts/verify_plugin_publication.py \
+            --repository "$RUNNER_TEMP/validated-resources/repository" \
+            --source-ref "$SOURCE_REF" \
+            --report "$RUNNER_TEMP/validated-resources/plugin-provenance.json"
+
+      - name: Upload validated core, resources, and Gradle plugin repository
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: validated-resources-maven
+          path: ${{ runner.temp }}/validated-resources
+          if-no-files-found: error
+          retention-days: 1

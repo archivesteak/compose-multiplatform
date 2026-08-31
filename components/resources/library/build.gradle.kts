@@ -122,7 +122,6 @@ kotlin {
             }
         }
         val androidInstrumentedTest by getting {
-            dependsOn(jvmAndAndroidTest)
             dependencies {
                 implementation(libs.androidx.test.core)
                 implementation(libs.androidx.compose.ui.test)
@@ -147,20 +146,8 @@ kotlin {
                  implementation(libs.kotlinx.browser)
             }
         }
-        val jsMain by getting {
-            dependsOn(webMain)
-        }
-        val wasmJsMain by getting {
-            dependsOn(webMain)
-        }
         val webTest by getting {
             dependsOn(skikoTest)
-        }
-        val jsTest by getting {
-            dependsOn(webTest)
-        }
-        val wasmJsTest by getting {
-            dependsOn(webTest)
         }
     }
 }
@@ -179,7 +166,7 @@ android {
     @Suppress("UnstableApiUsage")
     testOptions {
         managedDevices {
-            devices {
+            allDevices {
                 maybeCreate<com.android.build.api.dsl.ManagedVirtualDevice>("pixel5").apply {
                     device = "Pixel 5"
                     apiLevel = 31

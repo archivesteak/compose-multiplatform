@@ -1,16 +1,13 @@
 package org.jetbrains.compose
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.artifacts.ModuleVersionIdentifier
-import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ComponentSelector
-import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentSelector
-import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentSelector
 import org.gradle.api.artifacts.result.ResolvedDependencyResult
-import org.gradle.api.artifacts.result.ResolvedComponentResult
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.provider.SetProperty
@@ -35,10 +32,99 @@ import javax.inject.Inject
 
 internal fun Project.configureRuntimeLibrariesCompatibilityCheck() {
     plugins.withId(KOTLIN_MPP_PLUGIN_ID) {
-        mppExt.targets.configureEach { target -> target.configureRuntimeLibrariesCompatibilityCheck() }
+        mppExt.targets.configureEach { target ->
+            target.configureForkComposeLineageCheck()
+            target.configureRuntimeLibrariesCompatibilityCheck()
+        }
     }
     plugins.withId(KOTLIN_JVM_PLUGIN_ID) {
+        kotlinJvmExt.target.configureForkComposeLineageCheck()
         kotlinJvmExt.target.configureRuntimeLibrariesCompatibilityCheck()
+    }
+}
+
+private val independentJetBrainsComposeGroups = setOf(
+    "org.jetbrains.compose.annotation-internal",
+    "org.jetbrains.compose.collection-internal",
+    "org.jetbrains.compose.hot-reload",
+)
+
+internal fun unsupportedUpstreamComposeCoordinates(
+    coordinates: Iterable<String>,
+): List<String> = coordinates
+    .filter { coordinate ->
+        val group = coordinate.substringBefore(':')
+        group == "org.jetbrains.skiko" ||
+            group == "org.jetbrains.androidx.navigationevent" ||
+            (
+                (group == "org.jetbrains.compose" || group.startsWith("org.jetbrains.compose.")) &&
+                    group !in independentJetBrainsComposeGroups
+            )
+    }
+    .distinct()
+    .sorted()
+
+private fun KotlinTarget.configureForkComposeLineageCheck() {
+    val target = this
+    compilations.configureEach { compilation ->
+        val configurationNames = listOfNotNull(
+            compilation.compileDependencyConfigurationName,
+            compilation.runtimeDependencyConfigurationName,
+        ).distinct()
+        if (configurationNames.isEmpty()) return@configureEach
+        val configurations = configurationNames.map(project.configurations::getByName)
+        val task = project.tasks.registerOrConfigure<ForkComposeLineageCheck>(
+            joinLowerCamelCase("check", target.name, compilation.name, "composeForkLineage"),
+        ) {
+            projectPath.set(project.path)
+            this.configurationNames.set(configurationNames)
+            resolvedCoordinates.set(
+                provider {
+                    configurations.flatMap { configuration ->
+                        configuration.incoming.resolutionResult.allDependencies
+                            .filterIsInstance<ResolvedDependencyResult>()
+                            .mapNotNull { dependency ->
+                                dependency.selected.moduleVersion?.let { module ->
+                                    "${module.group}:${module.name}:${module.version}"
+                                }
+                            }
+                    }.toSet()
+                }
+            )
+        }
+        compilation.compileTaskProvider.dependsOn(task)
+    }
+}
+
+@DisableCachingByDefault(because = "Dependency resolution already provides the complete input")
+internal abstract class ForkComposeLineageCheck : DefaultTask() {
+    @get:Input
+    abstract val projectPath: Property<String>
+
+    @get:Input
+    abstract val configurationNames: SetProperty<String>
+
+    @get:Input
+    abstract val resolvedCoordinates: SetProperty<String>
+
+    @TaskAction
+    fun run() {
+        val unsupported = unsupportedUpstreamComposeCoordinates(resolvedCoordinates.get())
+        if (unsupported.isEmpty()) return
+
+        throw GradleException(
+            buildString {
+                appendLine("The Compose mingw fork dependency graph contains upstream Compose artifacts.")
+                appendLine("Project: ${projectPath.get()}")
+                appendLine("Configurations: ${configurationNames.get().sorted().joinToString()}")
+                appendLine("Unsupported artifacts:")
+                unsupported.forEach { appendLine("  - $it") }
+                appendLine(
+                    "Use the corresponding io.github.archivesteak Compose/Skiko artifacts or " +
+                        "remove the unsupported dependency. Mixed fork/upstream graphs are not binary-safe."
+                )
+            }
+        )
     }
 }
 

@@ -1,7 +1,10 @@
 rootProject.name = "Resources-Test"
 pluginManagement {
     repositories {
-        mavenLocal()
+        exclusiveContent {
+            forRepository { mavenLocal() }
+            filter { includeGroupByRegex("io\\.github\\.archivesteak(\\..*)?") }
+        }
         gradlePluginPortal()
         google()
         maven("https://packages.jetbrains.team/maven/p/cmp/dev")
@@ -10,7 +13,7 @@ pluginManagement {
         id("com.android.kotlin.multiplatform.library").version("AGP_VERSION_PLACEHOLDER")
         id("org.jetbrains.kotlin.multiplatform").version("KOTLIN_VERSION_PLACEHOLDER")
         id("org.jetbrains.kotlin.plugin.compose").version("KOTLIN_VERSION_PLACEHOLDER")
-        id("org.jetbrains.compose").version("COMPOSE_GRADLE_PLUGIN_VERSION_PLACEHOLDER")
+        id("io.github.archivesteak.compose").version("COMPOSE_GRADLE_PLUGIN_VERSION_PLACEHOLDER")
     }
 }
 dependencyResolutionManagement {
@@ -19,6 +22,9 @@ dependencyResolutionManagement {
         mavenCentral()
         gradlePluginPortal()
         google()
-        mavenLocal()
+        exclusiveContent {
+            forRepository { mavenLocal() }
+            filter { includeGroupByRegex("io\\.github\\.archivesteak(\\..*)?") }
+        }
     }
 }

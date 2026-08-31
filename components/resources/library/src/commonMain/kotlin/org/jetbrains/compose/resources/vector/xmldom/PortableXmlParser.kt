@@ -42,8 +42,10 @@ private class PortableElementImpl(
     override fun lookupPrefix(namespaceURI: String): String = prefixMap[namespaceURI] ?: ""
 }
 
-private class PortableXmlParser(private val xml: String) {
+private class PortableXmlParser(source: String) {
+    private val xml = source.replace("\r\n", "\n").replace('\r', '\n')
     private var pos = 0
+    private var documentStart = 0
     private var root: PortableElementImpl? = null
     private val stack = ArrayDeque<PortableElementImpl>()
     private val prefixToUri = mutableMapOf(
@@ -51,10 +53,13 @@ private class PortableXmlParser(private val xml: String) {
     )
 
     fun parseDocument(): Element {
+        validateXmlCharacters(xml)
+        if (xml.startsWith('\uFEFF')) pos++
+        documentStart = pos
         while (pos < xml.length) {
             when {
-                xml.startsWith("<?", pos) -> skipPast("?>")
-                xml.startsWith("<!--", pos) -> skipPast("-->")
+                xml.startsWith("<?", pos) -> readProcessingInstruction()
+                xml.startsWith("<!--", pos) -> readComment()
                 xml.startsWith("<![CDATA[", pos) -> readCData()
                 xml.startsWith("</", pos) -> readEndTag()
                 xml.startsWith("<!", pos) ->
@@ -73,6 +78,7 @@ private class PortableXmlParser(private val xml: String) {
         val attributes = LinkedHashMap<String, String>()
         val selfClosing: Boolean
         while (true) {
+            val beforeWhitespace = pos
             skipWhitespace()
             when {
                 pos >= xml.length ->
@@ -88,6 +94,11 @@ private class PortableXmlParser(private val xml: String) {
                     break
                 }
                 else -> {
+                    if (pos == beforeWhitespace) {
+                        throw MalformedXMLException(
+                            "expected whitespace before an attribute in <$nodeName>"
+                        )
+                    }
                     val attrName = readName()
                     skipWhitespace()
                     expect('=')
@@ -97,7 +108,14 @@ private class PortableXmlParser(private val xml: String) {
                         throw MalformedXMLException("expected a quoted value for '$attrName'")
                     }
                     pos++
-                    val value = decodeEntities(readUntil(quote))
+                    val rawValue = readUntil(quote)
+                    if ('<' in rawValue) {
+                        throw MalformedXMLException("'<' is not allowed in attribute '$attrName'")
+                    }
+                    val normalizedRawValue = rawValue.map { character ->
+                        if (character == '\t' || character == '\n') ' ' else character
+                    }.joinToString("")
+                    val value = decodeEntities(normalizedRawValue)
                     if (attributes.put(attrName, value) != null) {
                         throw MalformedXMLException("duplicate attribute '$attrName' in <$nodeName>")
                     }
@@ -113,6 +131,7 @@ private class PortableXmlParser(private val xml: String) {
                 name.startsWith("xmlns:") -> name.substring(6)
                 else -> continue
             }
+            validateNamespaceDeclaration(prefix, value)
             previousMappings[prefix] = prefixToUri[prefix]
             prefixToUri[prefix] = value
         }
@@ -134,6 +153,9 @@ private class PortableXmlParser(private val xml: String) {
         }
 
         val prefix = nodeName.substringBefore(':', "")
+        if (prefix == XMLNS_PREFIX) {
+            throw MalformedXMLException("reserved prefix '$XMLNS_PREFIX' on element <$nodeName>")
+        }
         if (prefix.isNotEmpty() && prefix !in prefixToUri) {
             throw MalformedXMLException("undeclared prefix '$prefix' on element <$nodeName>")
         }
@@ -174,11 +196,14 @@ private class PortableXmlParser(private val xml: String) {
     private fun readText() {
         val start = pos
         while (pos < xml.length && xml[pos] != '<') pos++
-        val text = decodeEntities(xml.substring(start, pos))
-        if (stack.isEmpty() && text.isNotBlank()) {
+        val rawText = xml.substring(start, pos)
+        if ("]]>" in rawText) {
+            throw MalformedXMLException("']]>' is not allowed outside a CDATA section")
+        }
+        if (stack.isEmpty() && rawText.any { !it.isXmlWhitespace() }) {
             throw MalformedXMLException("text outside the root element")
         }
-        appendText(text)
+        appendText(decodeEntities(rawText))
     }
 
     private fun readCData() {
@@ -191,8 +216,10 @@ private class PortableXmlParser(private val xml: String) {
     }
 
     private fun appendText(text: String) {
-        val current = stack.lastOrNull() ?: return
-        current.textContent = current.textContent.orEmpty() + text
+        // DOM Element.textContent includes all descendant text in document order.
+        stack.forEach { element ->
+            element.textContent = element.textContent.orEmpty() + text
+        }
     }
 
     private fun restoreNamespaceMappings(previousMappings: Map<String, String?>) {
@@ -206,7 +233,7 @@ private class PortableXmlParser(private val xml: String) {
         val start = pos
         while (
             pos < xml.length &&
-            !xml[pos].isWhitespace() &&
+            !xml[pos].isXmlWhitespace() &&
             xml[pos] !in "=/>?<\"'&"
         ) {
             pos++
@@ -228,14 +255,37 @@ private class PortableXmlParser(private val xml: String) {
         return result
     }
 
-    private fun skipPast(marker: String) {
-        val end = xml.indexOf(marker, pos)
-        if (end < 0) throw MalformedXMLException("unterminated markup at offset $pos")
-        pos = end + marker.length
+    private fun readProcessingInstruction() {
+        val start = pos
+        pos += 2
+        val target = readName()
+        if (!xml.startsWith("?>", pos) && xml.getOrNull(pos)?.isXmlWhitespace() != true) {
+            throw MalformedXMLException("expected whitespace after processing-instruction target '$target'")
+        }
+        if (target.equals("xml", ignoreCase = true)) {
+            if (target != "xml" || start != documentStart) {
+                throw MalformedXMLException("the XML declaration must be lowercase and first in the document")
+            }
+        }
+        val end = xml.indexOf("?>", pos)
+        if (end < 0) throw MalformedXMLException("unterminated processing instruction at offset $start")
+        pos = end + 2
+    }
+
+    private fun readComment() {
+        val start = pos
+        pos += "<!--".length
+        val end = xml.indexOf("-->", pos)
+        if (end < 0) throw MalformedXMLException("unterminated comment at offset $start")
+        val content = xml.substring(pos, end)
+        if ("--" in content || content.endsWith('-')) {
+            throw MalformedXMLException("invalid '--' sequence in comment at offset $start")
+        }
+        pos = end + 3
     }
 
     private fun skipWhitespace() {
-        while (pos < xml.length && xml[pos].isWhitespace()) pos++
+        while (pos < xml.length && xml[pos].isXmlWhitespace()) pos++
     }
 
     private fun expect(c: Char) {
@@ -264,9 +314,13 @@ private class PortableXmlParser(private val xml: String) {
                     "apos" -> append('\'')
                     else -> {
                         val codePoint = when {
-                            entity.startsWith("#x", ignoreCase = true) ->
+                            entity.startsWith("#x") &&
+                                entity.substring(2).isNotEmpty() &&
+                                entity.substring(2).all(Char::isHexDigit) ->
                                 entity.substring(2).toIntOrNull(16)
-                            entity.startsWith("#") ->
+                            entity.startsWith("#") &&
+                                entity.substring(1).isNotEmpty() &&
+                                entity.substring(1).all(Char::isDigit) ->
                                 entity.substring(1).toIntOrNull()
                             else -> null
                         } ?: throw MalformedXMLException("unknown entity '&$entity;'")
@@ -295,13 +349,105 @@ private class PortableXmlParser(private val xml: String) {
             append(((supplementary and 0x3ff) + 0xdc00).toChar())
         }
     }
+
+    private fun validateNamespaceDeclaration(prefix: String, uri: String) {
+        when {
+            prefix == XMLNS_PREFIX ->
+                throw MalformedXMLException("the '$XMLNS_PREFIX' prefix cannot be declared")
+            uri == XMLNS_NAMESPACE ->
+                throw MalformedXMLException("the namespace '$XMLNS_NAMESPACE' cannot be bound")
+            prefix == XML_PREFIX && uri != XML_NAMESPACE ->
+                throw MalformedXMLException("the '$XML_PREFIX' prefix must use '$XML_NAMESPACE'")
+            prefix != XML_PREFIX && uri == XML_NAMESPACE ->
+                throw MalformedXMLException("only the '$XML_PREFIX' prefix may use '$XML_NAMESPACE'")
+            prefix.isNotEmpty() && uri.isEmpty() ->
+                throw MalformedXMLException("prefixed namespace '$prefix' must not be empty")
+        }
+    }
 }
+
+private fun validateXmlCharacters(value: String) {
+    var index = 0
+    while (index < value.length) {
+        val first = value[index].code
+        val codePoint = when {
+            first in 0xd800..0xdbff -> {
+                val second = value.getOrNull(index + 1)?.code
+                    ?.takeIf { it in 0xdc00..0xdfff }
+                    ?: throw MalformedXMLException("unpaired high surrogate at offset $index")
+                index++
+                0x10000 + ((first - 0xd800) shl 10) + (second - 0xdc00)
+            }
+            first in 0xdc00..0xdfff ->
+                throw MalformedXMLException("unpaired low surrogate at offset $index")
+            else -> first
+        }
+        val valid =
+            codePoint == 0x9 || codePoint == 0xa || codePoint == 0xd ||
+                codePoint in 0x20..0xd7ff ||
+                codePoint in 0xe000..0xfffd ||
+                codePoint in 0x10000..0x10ffff
+        if (!valid) throw MalformedXMLException("invalid XML character at offset $index")
+        index++
+    }
+}
+
+private fun Char.isHexDigit(): Boolean =
+    this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
+
+private fun Char.isXmlWhitespace(): Boolean =
+    this == ' ' || this == '\t' || this == '\n' || this == '\r'
+
+private const val XML_PREFIX = "xml"
+private const val XMLNS_PREFIX = "xmlns"
+private const val XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace"
+private const val XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/"
 
 private fun String.isXmlNamePart(): Boolean {
     if (isEmpty()) return false
-    if (!(first() == '_' || first().isLetter() || first().code >= 0x80)) return false
-    return drop(1).all { character ->
-        character == '_' || character == '-' || character == '.' ||
-            character.isLetterOrDigit() || character.code >= 0x80
+    var index = 0
+    val first = xmlCodePointAt(index)
+    if (!first.isXmlNameStartCharacter()) return false
+    index += first.xmlCharacterWidth()
+    while (index < length) {
+        val codePoint = xmlCodePointAt(index)
+        if (!codePoint.isXmlNameCharacter()) return false
+        index += codePoint.xmlCharacterWidth()
     }
+    return true
 }
+
+private fun String.xmlCodePointAt(index: Int): Int {
+    val first = this[index].code
+    if (first !in 0xd800..0xdbff) return first
+    val second = this[index + 1].code
+    return 0x10000 + ((first - 0xd800) shl 10) + (second - 0xdc00)
+}
+
+private fun Int.xmlCharacterWidth(): Int = if (this > 0xffff) 2 else 1
+
+private fun Int.isXmlNameStartCharacter(): Boolean =
+    this == '_'.code ||
+        this in 'A'.code..'Z'.code ||
+        this in 'a'.code..'z'.code ||
+        this in 0xc0..0xd6 ||
+        this in 0xd8..0xf6 ||
+        this in 0xf8..0x2ff ||
+        this in 0x370..0x37d ||
+        this in 0x37f..0x1fff ||
+        this in 0x200c..0x200d ||
+        this in 0x2070..0x218f ||
+        this in 0x2c00..0x2fef ||
+        this in 0x3001..0xd7ff ||
+        this in 0xf900..0xfdcf ||
+        this in 0xfdf0..0xfffd ||
+        this in 0x10000..0xeffff
+
+private fun Int.isXmlNameCharacter(): Boolean =
+    isXmlNameStartCharacter() ||
+        this == '-'.code ||
+        this == '.'.code ||
+        this in '0'.code..'9'.code ||
+        this == 0xb7 ||
+        this in 0x300..0x36f ||
+        this in 0x203f..0x2040
