@@ -25,5 +25,6 @@ kotlin {
 configureMavenPublication(
     groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-splitpane",
-    name = "SplitPane for Compose Multiplatform"
+    name = "SplitPane for Compose Multiplatform",
+    description = "Resizable split-pane layouts for Compose Multiplatform."
 )

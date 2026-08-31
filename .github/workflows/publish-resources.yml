@@ -462,7 +462,10 @@ jobs:
         env:
           SOURCE_REF: ${{ inputs.source_ref }}
         run: |
-          ./gradlew "-Dmaven.repo.local=$RUNNER_TEMP/validated-resources/repository" \
+          plugin_repository="$RUNNER_TEMP/plugin-publication-repository"
+          plugin_report="$RUNNER_TEMP/plugin-publication-provenance.json"
+          cp -a "$RUNNER_TEMP/validated-resources/repository" "$plugin_repository"
+          ./gradlew "-Dmaven.repo.local=$plugin_repository" \
             --no-daemon --stacktrace \
             :compose:publishToMavenLocal :compose:checkJar
           resolved=$(git rev-parse HEAD)
@@ -471,6 +474,30 @@ jobs:
             echo "plugin source changed during publication"
             exit 1
           fi
+          python3 ../../orchestration/.github/scripts/verify_plugin_publication.py \
+            --repository "$plugin_repository" \
+            --source-ref "$SOURCE_REF" \
+            --report "$plugin_report"
+          mapfile -t plugin_directories < <(
+            jq -r '.files | keys[] | split("/")[:-1] | join("/")' "$plugin_report" |
+              sort -u
+          )
+          if [ "${#plugin_directories[@]}" -ne 2 ]; then
+            echo "expected exactly two verified plugin version directories"
+            exit 1
+          fi
+          for relative in "${plugin_directories[@]}"; do
+            case "$relative" in
+              io/github/archivesteak/compose/*/*) ;;
+              *) echo "unsafe plugin version directory: $relative"; exit 1 ;;
+            esac
+            source_directory="$plugin_repository/$relative"
+            destination_directory="$RUNNER_TEMP/validated-resources/repository/$relative"
+            test -d "$source_directory"
+            test ! -e "$destination_directory"
+            mkdir -p "$(dirname "$destination_directory")"
+            cp -a "$source_directory" "$destination_directory"
+          done
           python3 ../../orchestration/.github/scripts/verify_plugin_publication.py \
             --repository "$RUNNER_TEMP/validated-resources/repository" \
             --source-ref "$SOURCE_REF" \

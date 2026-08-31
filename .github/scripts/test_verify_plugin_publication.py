@@ -33,7 +33,7 @@ def metadata_xml() -> str:
     <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
   </license></licenses>
   <developers><developer>
-    <id>archivesteak</id><name>archivesteak</name>
+    <id>archivesteak</id><name>Jack Harrington</name>
     <url>https://github.com/archivesteak</url>
   </developer></developers>
   <scm>

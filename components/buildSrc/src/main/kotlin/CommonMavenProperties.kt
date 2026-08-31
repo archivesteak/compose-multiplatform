@@ -1,13 +1,31 @@
 import org.gradle.api.Project
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.tasks.bundling.Jar
 import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.register
 
 fun Project.configureMavenPublication(
     groupId: String,
     artifactId: String,
-    name: String
+    name: String,
+    description: String
 ) {
+    require(description.isNotBlank()) { "Maven publication description must not be blank" }
+
+    val centralJavadocJar = tasks.register<Jar>("centralJavadocJar") {
+        group = "documentation"
+        this.description = "Assembles deterministic Maven Central documentation guidance"
+        archiveClassifier.set("javadoc")
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+        from(
+            rootProject.layout.projectDirectory.file(
+                "buildSrc/src/main/resources/central-javadoc/README.md"
+            )
+        )
+    }
+
     extensions.configure<PublishingExtension> {
         publications {
             all {
@@ -18,10 +36,20 @@ fun Project.configureMavenPublication(
                 afterEvaluate {
                     publication.groupId = groupId
                     publication.mppArtifactId = artifactId
+                    val hasPrimaryArtifact = publication.artifacts.any {
+                        it.classifier.isNullOrBlank()
+                    }
+                    val hasJavadocArtifact = publication.artifacts.any {
+                        it.classifier == "javadoc"
+                    }
+                    if (hasPrimaryArtifact && !hasJavadocArtifact) {
+                        publication.artifact(centralJavadocJar)
+                    }
                 }
 
                 pom {
                     this.name.set(name)
+                    this.description.set(description)
                     url.set("https://github.com/archivesteak/compose-multiplatform")
                     licenses {
                         license {
@@ -32,7 +60,7 @@ fun Project.configureMavenPublication(
                     developers {
                         developer {
                             id.set("archivesteak")
-                            this.name.set("archivesteak")
+                            this.name.set("Jack Harrington")
                             url.set("https://github.com/archivesteak")
                         }
                     }

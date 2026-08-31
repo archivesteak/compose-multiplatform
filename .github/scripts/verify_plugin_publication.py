@@ -43,7 +43,7 @@ LICENSE_METADATA = {
 }
 DEVELOPER_METADATA = {
     "id": "archivesteak",
-    "name": "archivesteak",
+    "name": "Jack Harrington",
     "url": "https://github.com/archivesteak",
 }
 SCM_METADATA = {

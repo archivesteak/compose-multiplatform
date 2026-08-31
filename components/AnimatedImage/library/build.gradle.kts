@@ -23,5 +23,6 @@ kotlin {
 configureMavenPublication(
     groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-animatedimage",
-    name = "AnimatedImage for Compose Multiplatform"
+    name = "AnimatedImage for Compose Multiplatform",
+    description = "Animated image rendering for Compose Multiplatform."
 )

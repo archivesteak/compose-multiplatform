@@ -79,5 +79,6 @@ android {
 configureMavenPublication(
     groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-ui-tooling-preview",
-    name = "Compose Multiplatform tooling preview API"
+    name = "Compose Multiplatform tooling preview API",
+    description = "Preview annotations and APIs for Compose Multiplatform tooling."
 )

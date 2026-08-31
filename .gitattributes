@@ -1,2 +1,3 @@
 # Compiled value resources contain byte offsets; line-ending conversion corrupts them.
 *.cvr text eol=lf
+/components/buildSrc/src/main/resources/central-javadoc/README.md text eol=lf

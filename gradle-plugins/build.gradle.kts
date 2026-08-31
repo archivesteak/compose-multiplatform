@@ -112,7 +112,7 @@ fun Project.configureMavenPublication(
                 developers {
                     developer {
                         id.set("archivesteak")
-                        name.set("archivesteak")
+                        name.set("Jack Harrington")
                         url.set("https://github.com/archivesteak")
                     }
                 }
@@ -146,7 +146,7 @@ fun Project.configurePluginMarkerPublications(config: MavenPublicationConfigExte
                     developers {
                         developer {
                             id.set("archivesteak")
-                            name.set("archivesteak")
+                            name.set("Jack Harrington")
                             url.set("https://github.com/archivesteak")
                         }
                     }

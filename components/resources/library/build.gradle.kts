@@ -189,7 +189,8 @@ android {
 configureMavenPublication(
     groupId = "io.github.archivesteak.compose.components",
     artifactId = "components-resources",
-    name = "Resources for Compose JB"
+    name = "Resources for Compose Multiplatform",
+    description = "Type-safe multiplatform resource access for Compose Multiplatform applications."
 )
 
 apiValidation {
