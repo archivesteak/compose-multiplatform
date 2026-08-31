@@ -27,14 +27,22 @@ class CentralMetadataContractTest(unittest.TestCase):
             'this.name.set("Jack Harrington")',
             "developerConnection.set(",
             'archiveClassifier.set("javadoc")',
+            'destinationDirectory.set(layout.buildDirectory.dir("publications/central-javadoc"))',
+            "duplicatesStrategy = DuplicatesStrategy.FAIL",
             "isPreserveFileTimestamps = false",
             "isReproducibleFileOrder = true",
-            "hasPrimaryArtifact",
-            "hasJavadocArtifact",
+            "entryCompression = ZipEntryCompression.STORED",
+            'filePermissions { unix("0644") }',
+            'dirPermissions { unix("0755") }',
+            "publication.artifact(centralJavadocJar)",
         ):
             self.assertIn(expected, helper)
+        self.assertNotIn("publication.artifacts", helper)
         self.assertTrue(README.is_file())
-        self.assertIn("API documentation", README.read_text(encoding="utf-8"))
+        readme = README.read_text(encoding="utf-8")
+        self.assertIn("API documentation", readme)
+        self.assertIn("accompanies a Compose Multiplatform publication", readme)
+        self.assertNotIn("platform-specific", readme)
         self.assertIn(
             "/components/buildSrc/src/main/resources/central-javadoc/README.md text eol=lf",
             GIT_ATTRIBUTES.read_text(encoding="utf-8"),

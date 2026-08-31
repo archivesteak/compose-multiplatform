@@ -1,7 +1,9 @@
 import org.gradle.api.Project
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.bundling.ZipEntryCompression
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.register
 
@@ -17,8 +19,13 @@ fun Project.configureMavenPublication(
         group = "documentation"
         this.description = "Assembles deterministic Maven Central documentation guidance"
         archiveClassifier.set("javadoc")
+        destinationDirectory.set(layout.buildDirectory.dir("publications/central-javadoc"))
+        duplicatesStrategy = DuplicatesStrategy.FAIL
         isPreserveFileTimestamps = false
         isReproducibleFileOrder = true
+        entryCompression = ZipEntryCompression.STORED
+        filePermissions { unix("0644") }
+        dirPermissions { unix("0755") }
         from(
             rootProject.layout.projectDirectory.file(
                 "buildSrc/src/main/resources/central-javadoc/README.md"
@@ -31,20 +38,16 @@ fun Project.configureMavenPublication(
             all {
                 val publication = this as MavenPublication
 
+                // This helper is used only by concrete library publications. Attach the
+                // documentation artifact directly so configuring the build never realizes
+                // Kotlin's deferred component artifacts before FinaliseDsl.
+                publication.artifact(centralJavadocJar)
+
                 //work around to fix an android publication artifact ID
                 //https://youtrack.jetbrains.com/issue/KT-53520
                 afterEvaluate {
                     publication.groupId = groupId
                     publication.mppArtifactId = artifactId
-                    val hasPrimaryArtifact = publication.artifacts.any {
-                        it.classifier.isNullOrBlank()
-                    }
-                    val hasJavadocArtifact = publication.artifacts.any {
-                        it.classifier == "javadoc"
-                    }
-                    if (hasPrimaryArtifact && !hasJavadocArtifact) {
-                        publication.artifact(centralJavadocJar)
-                    }
                 }
 
                 pom {

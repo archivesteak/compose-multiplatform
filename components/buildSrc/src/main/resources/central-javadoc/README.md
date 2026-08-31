@@ -1,6 +1,6 @@
 # API documentation
 
-This archive accompanies a platform-specific Compose Multiplatform publication. The public API is
+This archive accompanies a Compose Multiplatform publication. The public API is
 documented by the root module and in the project source at
 <https://github.com/archivesteak/compose-multiplatform>.
 
