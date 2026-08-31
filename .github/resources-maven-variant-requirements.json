@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 2,
+  "groupPrefix": "io.github.archivesteak.compose.components",
+  "note": "This immutable contract pins the complete resources/plugin source commit A. Dispatch the release gate from contract commit B with source_ref=A and contract_ref=B.",
+  "platformOwners": {
+    "common": "windows",
+    "jvm": "windows",
+    "mingwX64": "windows",
+    "macosArm64": "apple",
+    "iosArm64": "apple",
+    "iosSimulatorArm64": "apple",
+    "js": "web",
+    "wasmJs": "web",
+    "android": "web"
+  },
+  "sourceProvenance": {
+    "windows": {
+      "compose-core": "4945c6e26f29fb4f2254b3e5ec4ddb93ca6fefea",
+      "resources": "1840e8b6b5898cc963e8b0aeef87643e14e89fc0",
+      "skia": "343b3b3b03072992df41ef46c3d8e78ef7a5792e",
+      "skiko": "a2b822f3ff563eb5324bd2e3073b1225031607c3"
+    },
+    "apple": {
+      "compose-core": "4945c6e26f29fb4f2254b3e5ec4ddb93ca6fefea",
+      "resources": "1840e8b6b5898cc963e8b0aeef87643e14e89fc0",
+      "skia": "343b3b3b03072992df41ef46c3d8e78ef7a5792e",
+      "skiko": "a2b822f3ff563eb5324bd2e3073b1225031607c3"
+    },
+    "web": {
+      "compose-core": "4945c6e26f29fb4f2254b3e5ec4ddb93ca6fefea",
+      "resources": "1840e8b6b5898cc963e8b0aeef87643e14e89fc0",
+      "skia": "343b3b3b03072992df41ef46c3d8e78ef7a5792e",
+      "skiko": "a2b822f3ff563eb5324bd2e3073b1225031607c3"
+    }
+  },
+  "pomOnlyModules": [],
+  "modules": [
+    {
+      "coordinate": "io.github.archivesteak.compose.components:components-resources:1.12.0-beta02-mingw",
+      "requiredVariants": {
+        "common": [
+          "metadataApiElements",
+          "metadataSourcesElements"
+        ],
+        "jvm": [
+          "desktopApiElements-published",
+          "desktopRuntimeElements-published",
+          "desktopSourcesElements-published"
+        ],
+        "mingwX64": [
+          "mingwX64ApiElements-published",
+          "mingwX64SourcesElements-published",
+          "mingwX64ResourcesElements-published",
+          "mingwX64MetadataElements-published"
+        ],
+        "macosArm64": [
+          "macosArm64ApiElements-published",
+          "macosArm64SourcesElements-published",
+          "macosArm64ResourcesElements-published",
+          "macosArm64MetadataElements-published"
+        ],
+        "iosArm64": [
+          "iosArm64ApiElements-published",
+          "iosArm64SourcesElements-published",
+          "iosArm64ResourcesElements-published",
+          "iosArm64MetadataElements-published"
+        ],
+        "iosSimulatorArm64": [
+          "iosSimulatorArm64ApiElements-published",
+          "iosSimulatorArm64SourcesElements-published",
+          "iosSimulatorArm64ResourcesElements-published",
+          "iosSimulatorArm64MetadataElements-published"
+        ],
+        "js": [
+          "jsApiElements-published",
+          "jsRuntimeElements-published",
+          "jsSourcesElements-published",
+          "jsResourcesElements-published"
+        ],
+        "wasmJs": [
+          "wasmJsApiElements-published",
+          "wasmJsRuntimeElements-published",
+          "wasmJsSourcesElements-published",
+          "wasmJsResourcesElements-published"
+        ],
+        "android": [
+          "releaseApiElements-published",
+          "releaseRuntimeElements-published",
+          "releaseSourcesElements-published"
+        ]
+      },
+      "targetModules": {
+        "jvm": "components-resources-desktop",
+        "mingwX64": "components-resources-mingwX64",
+        "macosArm64": "components-resources-macosArm64",
+        "iosArm64": "components-resources-iosArm64",
+        "iosSimulatorArm64": "components-resources-iosSimulatorArm64",
+        "js": "components-resources-js",
+        "wasmJs": "components-resources-wasmJs",
+        "android": "components-resources-android"
+      }
+    }
+  ]
+}
