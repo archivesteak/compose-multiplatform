@@ -1,11 +1,10 @@
 // see https://kotlinlang.org/docs/js-project-setup.html#webpack-configuration-file
 // This file provides karma.config.d configuration to run tests with k/wasm and k/js.
 //
-// The whole body is wrapped in an IIFE so that local declarations (e.g. `path`) do not
-// leak into the shared karma.conf.js scope. For k/js the Compose plugin concatenates this
-// file with `compose-skiko-runtime.js`, which also declares `const path`, and top-level
-// re-declarations would throw "Identifier 'path' has already been declared".
+// The whole body is wrapped in an IIFE so local declarations do not leak into the
+// generated karma.conf.js scope or collide with other configuration fragments.
 (function (config) {
+    const fs = require("fs");
     const path = require("path");
 
     config.browserConsoleLogOptions.level = "debug";
@@ -19,20 +18,60 @@
     debug(`karma basePath: ${basePath}`);
     debug(`karma generatedAssetsPath: ${generatedAssetsPath}`);
 
-    config.proxies["/"] = path.resolve(basePath, "kotlin");
+    const kotlinPath = path.resolve(basePath, "kotlin");
 
-    config.files = [
+    // Karma exposes files below its base path at /base/. ResourceReader fetches
+    // test assets from the web root, so route those requests to the served
+    // Kotlin package instead of treating a local filesystem path as an HTTP
+    // proxy target.
+    config.proxies["/"] = "/base/kotlin/";
+
+    const skikoReexports = path.resolve(kotlinPath, "js-skiko-reexport-symbols.mjs");
+    const skikoModule = path.resolve(kotlinPath, "skiko.mjs");
+    const skikoWasm = path.resolve(kotlinPath, "skiko.wasm");
+    const skikoLoader = path.resolve(kotlinPath, "compose-skiko-loader.js");
+    const skikoFiles = [];
+
+    if (fs.existsSync(skikoReexports)) {
+        fs.writeFileSync(skikoLoader, `
+(function () {
+    if (!window.__karma__) return;
+    const originalLoaded = window.__karma__.loaded.bind(window.__karma__);
+    let skikoReady;
+    window.__karma__.loaded = function () {
+        if (!skikoReady) {
+            const reexportUrl = Object.keys(window.__karma__.files || {})
+                .find((url) => url.endsWith("js-skiko-reexport-symbols.mjs"));
+            skikoReady = reexportUrl
+                ? import(reexportUrl).then((module) => module.api.awaitSkiko)
+                : Promise.reject(new Error("Skiko re-export module was not served by Karma"));
+        }
+        skikoReady.then(originalLoaded).catch((error) => {
+            window.__karma__.error(error && error.stack ? error.stack : String(error));
+        });
+    };
+})();
+`.trim());
+
+        skikoFiles.push(
+            skikoLoader,
+            {pattern: skikoReexports, included: false, served: true, watched: false},
+            {pattern: skikoModule, included: false, served: true, watched: false},
+            {pattern: skikoWasm, included: false, served: true, watched: false},
+        );
+    }
+
+    config.files = skikoFiles.concat([
         {pattern: path.resolve(generatedAssetsPath, "**/*"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.png"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.cvr"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.otf"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.gif"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.ttf"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.txt"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.json"), included: false, served: true, watched: false},
-        {pattern: path.resolve(basePath, "kotlin", "**/*.xml"), included: false, served: true, watched: false},
-        path.resolve(basePath, "kotlin", "test_setup.js"),
-    ].concat(config.files);
+        {pattern: path.resolve(kotlinPath, "**/*.png"), included: false, served: true, watched: false},
+        {pattern: path.resolve(kotlinPath, "**/*.cvr"), included: false, served: true, watched: false},
+        {pattern: path.resolve(kotlinPath, "**/*.otf"), included: false, served: true, watched: false},
+        {pattern: path.resolve(kotlinPath, "**/*.gif"), included: false, served: true, watched: false},
+        {pattern: path.resolve(kotlinPath, "**/*.ttf"), included: false, served: true, watched: false},
+        {pattern: path.resolve(kotlinPath, "**/*.txt"), included: false, served: true, watched: false},
+        {pattern: path.resolve(kotlinPath, "**/*.json"), included: false, served: true, watched: false},
+        {pattern: path.resolve(kotlinPath, "**/*.xml"), included: false, served: true, watched: false},
+    ], config.files);
 
     function KarmaWebpackOutputFramework(config) {
         // This controller is instantiated and set during the preprocessor phase.
