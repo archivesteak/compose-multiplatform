@@ -16,7 +16,11 @@ on:
         required: true
         type: string
       core_contract_ref:
-        description: Full commit SHA containing the core workflows, merger, and requirements
+        description: Full commit SHA that produced the core artifacts
+        required: true
+        type: string
+      core_tools_ref:
+        description: Full commit SHA containing the core merger and requirements
         required: true
         type: string
       core_ref:
@@ -55,7 +59,11 @@ on:
         type: string
         default: archivesteak/compose-multiplatform-core
       core_contract_ref:
-        description: Full commit SHA containing the core workflows, merger, and requirements
+        description: Full commit SHA that produced the core artifacts
+        required: true
+        type: string
+      core_tools_ref:
+        description: Full commit SHA containing the core merger and requirements
         required: true
         type: string
       core_ref:
@@ -85,6 +93,7 @@ jobs:
     with:
       core_repository: ${{ inputs.core_repository }}
       core_contract_ref: ${{ inputs.core_contract_ref }}
+      core_tools_ref: ${{ inputs.core_tools_ref }}
       core_ref: ${{ inputs.core_ref }}
       core_windows_run_id: ${{ inputs.core_windows_run_id }}
       core_apple_run_id: ${{ inputs.core_apple_run_id }}
@@ -156,11 +165,11 @@ jobs:
           path: compose-multiplatform
           persist-credentials: false
 
-      - name: Check out exact core contract
+      - name: Check out exact core tools contract
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.core_repository }}
-          ref: ${{ inputs.core_contract_ref }}
+          ref: ${{ inputs.core_tools_ref }}
           path: core-contract
           persist-credentials: false
           token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
@@ -189,6 +198,7 @@ jobs:
           CONTRACT_REF: ${{ inputs.contract_ref }}
           CORE_REPOSITORY: ${{ inputs.core_repository }}
           CORE_CONTRACT_REF: ${{ inputs.core_contract_ref }}
+          CORE_TOOLS_REF: ${{ inputs.core_tools_ref }}
           CORE_REF: ${{ inputs.core_ref }}
           WINDOWS_RUN_ID: ${{ inputs.core_windows_run_id }}
           APPLE_RUN_ID: ${{ inputs.core_apple_run_id }}
@@ -210,8 +220,8 @@ jobs:
             exit 1
           fi
           core_contract_resolved=$(git -C core-contract rev-parse HEAD)
-          if [ "$core_contract_resolved" != "$CORE_CONTRACT_REF" ]; then
-            echo "core contract checkout resolved to $core_contract_resolved, expected $CORE_CONTRACT_REF"
+          if [ "$core_contract_resolved" != "$CORE_TOOLS_REF" ]; then
+            echo "core tools checkout resolved to $core_contract_resolved, expected $CORE_TOOLS_REF"
             exit 1
           fi
           test -z "$(git -C compose-multiplatform status --porcelain=v1 --untracked-files=all)"
@@ -333,11 +343,11 @@ jobs:
           path: compose-multiplatform
           persist-credentials: false
 
-      - name: Check out exact core contract
+      - name: Check out exact core tools contract
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ inputs.core_repository }}
-          ref: ${{ inputs.core_contract_ref }}
+          ref: ${{ inputs.core_tools_ref }}
           path: core-contract
           persist-credentials: false
           token: ${{ secrets.core_artifacts_token || secrets.CORE_ARTIFACTS_TOKEN }}
@@ -384,6 +394,7 @@ jobs:
           CONTRACT_REF: ${{ inputs.contract_ref }}
           CORE_REPOSITORY: ${{ inputs.core_repository }}
           CORE_CONTRACT_REF: ${{ inputs.core_contract_ref }}
+          CORE_TOOLS_REF: ${{ inputs.core_tools_ref }}
           CORE_REF: ${{ inputs.core_ref }}
           WINDOWS_RUN_ID: ${{ inputs.core_windows_run_id }}
           APPLE_RUN_ID: ${{ inputs.core_apple_run_id }}
@@ -404,8 +415,8 @@ jobs:
             exit 1
           fi
           core_contract_resolved=$(git -C core-contract rev-parse HEAD)
-          if [ "$core_contract_resolved" != "$CORE_CONTRACT_REF" ]; then
-            echo "core contract checkout resolved to $core_contract_resolved, expected $CORE_CONTRACT_REF"
+          if [ "$core_contract_resolved" != "$CORE_TOOLS_REF" ]; then
+            echo "core tools checkout resolved to $core_contract_resolved, expected $CORE_TOOLS_REF"
             exit 1
           fi
           test -z "$(git -C compose-multiplatform status --porcelain=v1 --untracked-files=all)"
