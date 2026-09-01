@@ -31,6 +31,7 @@ kotlin {
                 useKarma { useChromeHeadless() }
             }
         }
+        binaries.executable()
     }
 
     @OptIn(ExperimentalWasmDsl::class)
