@@ -1,5 +1,9 @@
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsEnvSpec
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsPlugin
+import org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec
+import org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugin
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -10,6 +14,22 @@ plugins {
 
 subprojects {
     version = findProperty("deploy.version")!!
+
+    val downloadNode = providers.gradleProperty("compose.nodejs.download")
+        .map(String::toBooleanStrict)
+        .orElse(true)
+
+    plugins.withType<NodeJsPlugin>().configureEach {
+        extensions.configure<NodeJsEnvSpec> {
+            download.set(downloadNode)
+        }
+    }
+
+    plugins.withType<WasmNodeJsPlugin>().configureEach {
+        extensions.configure<WasmNodeJsEnvSpec> {
+            download.set(downloadNode)
+        }
+    }
 
     plugins.withId("java") {
         configureIfExists<JavaPluginExtension> {
