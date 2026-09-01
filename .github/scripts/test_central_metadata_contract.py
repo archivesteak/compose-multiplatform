@@ -16,6 +16,7 @@ README = (
 )
 RESOURCES_WORKFLOW = REPOSITORY / ".github/workflows/publish-resources.yml"
 COMPONENTS_BUILD = REPOSITORY / "components/build.gradle.kts"
+RESOURCES_LIBRARY_BUILD = REPOSITORY / "components/resources/library/build.gradle.kts"
 
 
 class CentralMetadataContractTest(unittest.TestCase):
@@ -115,6 +116,9 @@ class CentralMetadataContractTest(unittest.TestCase):
         self.assertIn("extensions.configure<YarnRootEnvSpec>", build)
         self.assertIn("extensions.configure<WasmYarnRootEnvSpec>", build)
         self.assertEqual(build.count("download.set(downloadWebToolchain)"), 4)
+
+        resources_library = RESOURCES_LIBRARY_BUILD.read_text(encoding="utf-8")
+        self.assertEqual(resources_library.count("binaries.executable()"), 2)
 
 
 if __name__ == "__main__":
