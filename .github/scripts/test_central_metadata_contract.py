@@ -15,6 +15,7 @@ README = (
     / "components/buildSrc/src/main/resources/central-javadoc/README.md"
 )
 RESOURCES_WORKFLOW = REPOSITORY / ".github/workflows/publish-resources.yml"
+COMPONENTS_BUILD = REPOSITORY / "components/build.gradle.kts"
 
 
 class CentralMetadataContractTest(unittest.TestCase):
@@ -88,6 +89,25 @@ class CentralMetadataContractTest(unittest.TestCase):
         upload = "- name: Upload validated core, resources, and Gradle plugin repository"
         self.assertIn(verifier, workflow)
         self.assertLess(workflow.index(verifier), workflow.index(upload))
+
+    def test_web_build_uses_the_kotlin_pinned_system_node(self) -> None:
+        workflow = RESOURCES_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0",
+            workflow,
+        )
+        self.assertIn('node-version: "24.10.0"', workflow)
+        self.assertIn("if: matrix.owner == 'web'", workflow)
+        self.assertEqual(
+            workflow.count('"-Pcompose.nodejs.download=$NODE_DOWNLOAD"'),
+            2,
+        )
+
+        build = COMPONENTS_BUILD.read_text(encoding="utf-8")
+        self.assertIn('gradleProperty("compose.nodejs.download")', build)
+        self.assertIn("extensions.configure<NodeJsEnvSpec>", build)
+        self.assertIn("extensions.configure<WasmNodeJsEnvSpec>", build)
+        self.assertEqual(build.count("download.set(downloadNode)"), 2)
 
 
 if __name__ == "__main__":
