@@ -2,8 +2,12 @@ import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsEnvSpec
 import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsPlugin
+import org.jetbrains.kotlin.gradle.targets.js.yarn.YarnPlugin
+import org.jetbrains.kotlin.gradle.targets.js.yarn.YarnRootEnvSpec
 import org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsEnvSpec
 import org.jetbrains.kotlin.gradle.targets.wasm.nodejs.WasmNodeJsPlugin
+import org.jetbrains.kotlin.gradle.targets.wasm.yarn.WasmYarnPlugin
+import org.jetbrains.kotlin.gradle.targets.wasm.yarn.WasmYarnRootEnvSpec
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -13,19 +17,31 @@ plugins {
 }
 
 allprojects {
-    val downloadNode = providers.gradleProperty("compose.nodejs.download")
+    val downloadWebToolchain = providers.gradleProperty("compose.webToolchain.download")
         .map(String::toBooleanStrict)
         .orElse(true)
 
     plugins.withType<NodeJsPlugin>().configureEach {
         extensions.configure<NodeJsEnvSpec> {
-            download.set(downloadNode)
+            download.set(downloadWebToolchain)
         }
     }
 
     plugins.withType<WasmNodeJsPlugin>().configureEach {
         extensions.configure<WasmNodeJsEnvSpec> {
-            download.set(downloadNode)
+            download.set(downloadWebToolchain)
+        }
+    }
+
+    plugins.withType<YarnPlugin>().configureEach {
+        extensions.configure<YarnRootEnvSpec> {
+            download.set(downloadWebToolchain)
+        }
+    }
+
+    plugins.withType<WasmYarnPlugin>().configureEach {
+        extensions.configure<WasmYarnRootEnvSpec> {
+            download.set(downloadWebToolchain)
         }
     }
 }
