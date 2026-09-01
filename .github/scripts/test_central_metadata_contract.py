@@ -104,6 +104,7 @@ class CentralMetadataContractTest(unittest.TestCase):
         )
 
         build = COMPONENTS_BUILD.read_text(encoding="utf-8")
+        self.assertIn("allprojects {", build)
         self.assertIn('gradleProperty("compose.nodejs.download")', build)
         self.assertIn("extensions.configure<NodeJsEnvSpec>", build)
         self.assertIn("extensions.configure<WasmNodeJsEnvSpec>", build)
