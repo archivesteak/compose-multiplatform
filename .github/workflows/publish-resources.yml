@@ -195,6 +195,13 @@ jobs:
         with:
           node-version: "24.10.0"
 
+      - name: Set up the Kotlin-pinned Yarn runtime
+        if: matrix.owner == 'web'
+        shell: bash
+        run: |
+          npm install --global yarn@1.22.22
+          test "$(yarn --version)" = 1.22.22
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
@@ -273,16 +280,16 @@ jobs:
         working-directory: compose-multiplatform/components
         env:
           RESOURCE_TASKS: ${{ matrix.tasks }}
-          NODE_DOWNLOAD: ${{ matrix.owner == 'web' && 'false' || 'true' }}
+          WEB_TOOLCHAIN_DOWNLOAD: ${{ matrix.owner == 'web' && 'false' || 'true' }}
         run: |
           read -r -a tasks <<<"$RESOURCE_TASKS"
           if [ "$RUNNER_OS" = Windows ]; then
             ./gradlew.bat "-Dmaven.repo.local=$RUNNER_TEMP/validated-core/repository" \
-              "-Pcompose.nodejs.download=$NODE_DOWNLOAD" \
+              "-Pcompose.webToolchain.download=$WEB_TOOLCHAIN_DOWNLOAD" \
               --no-daemon --stacktrace "${tasks[@]}"
           else
             ./gradlew "-Dmaven.repo.local=$RUNNER_TEMP/validated-core/repository" \
-              "-Pcompose.nodejs.download=$NODE_DOWNLOAD" \
+              "-Pcompose.webToolchain.download=$WEB_TOOLCHAIN_DOWNLOAD" \
               --no-daemon --stacktrace "${tasks[@]}"
           fi
 

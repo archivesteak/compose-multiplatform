@@ -99,16 +99,22 @@ class CentralMetadataContractTest(unittest.TestCase):
         self.assertIn('node-version: "24.10.0"', workflow)
         self.assertIn("if: matrix.owner == 'web'", workflow)
         self.assertEqual(
-            workflow.count('"-Pcompose.nodejs.download=$NODE_DOWNLOAD"'),
+            workflow.count(
+                '"-Pcompose.webToolchain.download=$WEB_TOOLCHAIN_DOWNLOAD"'
+            ),
             2,
         )
+        self.assertIn("npm install --global yarn@1.22.22", workflow)
+        self.assertIn('test "$(yarn --version)" = 1.22.22', workflow)
 
         build = COMPONENTS_BUILD.read_text(encoding="utf-8")
         self.assertIn("allprojects {", build)
-        self.assertIn('gradleProperty("compose.nodejs.download")', build)
+        self.assertIn('gradleProperty("compose.webToolchain.download")', build)
         self.assertIn("extensions.configure<NodeJsEnvSpec>", build)
         self.assertIn("extensions.configure<WasmNodeJsEnvSpec>", build)
-        self.assertEqual(build.count("download.set(downloadNode)"), 2)
+        self.assertIn("extensions.configure<YarnRootEnvSpec>", build)
+        self.assertIn("extensions.configure<WasmYarnRootEnvSpec>", build)
+        self.assertEqual(build.count("download.set(downloadWebToolchain)"), 4)
 
 
 if __name__ == "__main__":
