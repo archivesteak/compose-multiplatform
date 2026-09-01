@@ -50,8 +50,7 @@
         "mingwX64": [
           "mingwX64ApiElements-published",
           "mingwX64SourcesElements-published",
-          "mingwX64ResourcesElements-published",
-          "mingwX64MetadataElements-published"
+          "mingwX64ResourcesElements-published"
         ],
         "macosArm64": [
           "macosArm64ApiElements-published",
