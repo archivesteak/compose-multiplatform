@@ -503,6 +503,12 @@ jobs:
             --source-ref "$SOURCE_REF" \
             --report "$RUNNER_TEMP/validated-resources/plugin-provenance.json"
 
+      - name: Verify Maven Central publication completeness
+        shell: bash
+        run: |
+          python3 core-contract/.github/scripts/verify-central-publications.py \
+            "$RUNNER_TEMP/validated-resources/repository"
+
       - name: Upload validated core, resources, and Gradle plugin repository
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

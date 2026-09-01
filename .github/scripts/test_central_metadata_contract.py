@@ -79,6 +79,16 @@ class CentralMetadataContractTest(unittest.TestCase):
             step,
         )
 
+    def test_central_verifier_runs_before_validated_repository_upload(self) -> None:
+        workflow = RESOURCES_WORKFLOW.read_text(encoding="utf-8")
+        verifier = (
+            "python3 core-contract/.github/scripts/verify-central-publications.py "
+            "\\\n            \"$RUNNER_TEMP/validated-resources/repository\""
+        )
+        upload = "- name: Upload validated core, resources, and Gradle plugin repository"
+        self.assertIn(verifier, workflow)
+        self.assertLess(workflow.index(verifier), workflow.index(upload))
+
 
 if __name__ == "__main__":
     unittest.main()
