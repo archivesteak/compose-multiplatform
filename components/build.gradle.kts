@@ -12,9 +12,7 @@ plugins {
     id("org.jetbrains.kotlinx.binary-compatibility-validator") apply false
 }
 
-subprojects {
-    version = findProperty("deploy.version")!!
-
+allprojects {
     val downloadNode = providers.gradleProperty("compose.nodejs.download")
         .map(String::toBooleanStrict)
         .orElse(true)
@@ -30,6 +28,10 @@ subprojects {
             download.set(downloadNode)
         }
     }
+}
+
+subprojects {
+    version = findProperty("deploy.version")!!
 
     plugins.withId("java") {
         configureIfExists<JavaPluginExtension> {
